@@ -1,0 +1,156 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@import "tailwindcss";
+
+:root {
+  --bg: #f5f5f5;
+  --card: #ffffff;
+  --card-2: #f0f0f0;
+  --ink: #111111;
+  --muted: #7a7a7a;
+  --line: #e4e4e4;
+  /* 메인: 화이트/블랙 */
+  --accent: #111111;
+  --accent-ink: #ffffff;
+  --accent-soft: #ececec;
+  /* 신호등: 탄수 노랑 / 단백질 초록 / 지방 빨강 */
+  --carb: #f0a81c;
+  --protein: #22a860;
+  --fat: #e2443f;
+  /* 홈 타일 4종: 칼로리 주황 / 물 파랑 / 단백질 초록 / 운동 보라 */
+  --kcal: #eb5a0c;
+  --water: #2f6fed;
+  --workout: #6f4ff2;
+  /* 남은 칼로리 상태 */
+  --ok: #2f6fed;
+  --ok-soft: #e6eefc;
+  --warn: #f0a81c;
+  --warn-soft: #fdf1d8;
+  --over: #e2443f;
+  --over-soft: #fde8e6;
+  --danger: #e2443f;
+  --danger-soft: #fde8e6;
+  /* 바디맵 자극 부위 */
+  --muscle: #ff5a3c;
+  --r-lg: 22px;
+  --r-md: 16px;
+  --r-sm: 12px;
+  --tab-h: 64px;
+}
+
+html {
+  color-scheme: light;
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  font-size: 16px; /* iOS 자동 줌 방지 */
+}
+
+input:focus-visible,
+button:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field input:focus-visible {
+  outline: none;
+}
+
+::placeholder {
+  color: #b9b1a3;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+/* 숫자 입력 스피너 제거 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--r-lg);
+}
+
+.hairline {
+  border-top: 1px solid var(--line);
+}
+
+.safe-bottom {
+  padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 20px);
+}
+
+/* 운동 데모: 시작/끝 2프레임 크로스페이드 */
+@keyframes demo-swap {
+  0%,
+  42% {
+    opacity: 0;
+  }
+  50%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.demo-frame-b {
+  animation: demo-swap 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-frame-b {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* 칼로리 링 */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-len);
+  }
+}
+.ring-progress {
+  animation: ring-draw 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring-progress {
+    animation: none;
+  }
+}
+
+/* 바텀시트 */
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.sheet-enter {
+  animation: sheet-up 0.22s ease-out both;
+}
