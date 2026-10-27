@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { isSupabaseConfigured } from "@/lib/config";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/config";
 import { setGuestCookie } from "@/lib/guest";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -23,7 +23,21 @@ export default function LoginView({ mode: initialMode = "login" }: { mode?: Auth
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [standaloneIos, setStandaloneIos] = useState(false);
+  // Supabase 에서 켜 둔 소셜 제공자만 버튼을 보여준다 (안 켜진 걸 누르면 Supabase 가 JSON 에러 페이지를 띄운다)
+  const [providers, setProviders] = useState<Record<Provider, boolean>>({ kakao: false, google: false });
   const configured = isSupabaseConfigured();
+
+  useEffect(() => {
+    if (!configured) return;
+    const ctl = new AbortController();
+    fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { external?: Record<string, boolean> } | null) => {
+        if (j?.external) setProviders({ kakao: !!j.external.kakao, google: !!j.external.google });
+      })
+      .catch(() => {});
+    return () => ctl.abort();
+  }, [configured]);
 
   // iOS 홈 화면 앱에서 OAuth를 시작하면 Safari로 빠져나가고 세션이 Safari에만 남는다 → 미리 안내
   useEffect(() => {
@@ -190,25 +204,31 @@ export default function LoginView({ mode: initialMode = "login" }: { mode?: Auth
       </div>
 
       <div className="mt-8 space-y-2.5">
-        {configured && standaloneIos && (
+        {configured && standaloneIos && (providers.kakao || providers.google) && (
           <p className="rounded-[var(--r-md)] px-4 py-3 text-[13px]" style={{ background: "var(--warn-soft)", color: "var(--ink)" }}>
             홈 화면 앱에서는 카카오·구글 로그인이 Safari로 열려. 이메일 로그인은 앱 안에서 바로 돼.
           </p>
         )}
         {configured ? (
-          <>
-            <div className="flex items-center gap-3 py-1 text-[12px]" style={{ color: "var(--muted)" }}>
-              <span className="h-px flex-1" style={{ background: "var(--line)" }} />
-              또는
-              <span className="h-px flex-1" style={{ background: "var(--line)" }} />
-            </div>
-            <OAuthButton onClick={() => signIn("kakao")} busy={busy === "kakao"} style={{ background: "#FEE500", color: "#191919" }}>
-              <KakaoIcon /> 카카오로 계속하기
-            </OAuthButton>
-            <OAuthButton onClick={() => signIn("google")} busy={busy === "google"} style={{ background: "var(--card)", color: "var(--ink)", border: "1px solid var(--line)" }}>
-              <GoogleIcon /> Google로 계속하기
-            </OAuthButton>
-          </>
+          (providers.kakao || providers.google) && (
+            <>
+              <div className="flex items-center gap-3 py-1 text-[12px]" style={{ color: "var(--muted)" }}>
+                <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+                또는
+                <span className="h-px flex-1" style={{ background: "var(--line)" }} />
+              </div>
+              {providers.kakao && (
+                <OAuthButton onClick={() => signIn("kakao")} busy={busy === "kakao"} style={{ background: "#FEE500", color: "#191919" }}>
+                  <KakaoIcon /> 카카오로 계속하기
+                </OAuthButton>
+              )}
+              {providers.google && (
+                <OAuthButton onClick={() => signIn("google")} busy={busy === "google"} style={{ background: "var(--card)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+                  <GoogleIcon /> Google로 계속하기
+                </OAuthButton>
+              )}
+            </>
+          )
         ) : (
           <p className="rounded-[var(--r-md)] px-4 py-3 text-[13px]" style={{ background: "var(--card)", color: "var(--muted)" }}>
             Supabase 키가 없어서 로그인은 꺼져 있어. 기록은 이 기기에만 저장돼.
