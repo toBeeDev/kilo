@@ -74,7 +74,7 @@ export function AccountButton() {
     return (
       <Link href="/me" aria-label="내 프로필" className={cls} style={{ background: "var(--ink)", color: "#fff" }}>
         {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img src={src} alt="" className="h-full w-full object-cover" />
         ) : (
           <span className="text-[15px] font-bold">{name.slice(0, 1).toUpperCase()}</span>
@@ -143,9 +143,4 @@ export function CameraIcon({ size = 20 }: { size?: number }) {
       <circle cx="12" cy="13" r="3.5" />
     </svg>
   );
-}
-
-export function weekdayLabel(day: string) {
-  const d = new Date(day + "T00:00:00");
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${"일월화수목금토"[d.getDay()]}요일`;
 }

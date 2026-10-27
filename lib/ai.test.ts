@@ -37,3 +37,43 @@ describe("sanitizeSummaryInput", () => {
     expect(out?.actual.kcal).toBe(1e9);
   });
 });
+
+import { validateInbody, validateMealItems } from "./ai";
+
+describe("validateInbody", () => {
+  it("정상 값 통과, 날짜 포맷 정리", () => {
+    const r = validateInbody({ weight: "75.2kg" as unknown as number, bodyFatPct: 15.3, skeletalMuscle: 36.1, measuredOn: "2026.10.26", confidence: "high" });
+    expect(r).toMatchObject({ weight: 75.2, bodyFatPct: 15.3, skeletalMuscle: 36.1, measuredOn: "2026-10-26", confidence: "high" });
+  });
+  it("범위 밖은 버리고 confidence low", () => {
+    const r = validateInbody({ weight: 752, bodyFatPct: 15, confidence: "high" });
+    expect(r.weight).toBeUndefined();
+    expect(r.confidence).toBe("low");
+  });
+  it("골격근 > 체중이면 모순 → 골격근 버림", () => {
+    const r = validateInbody({ weight: 60, bodyFatPct: 20, skeletalMuscle: 80 });
+    expect(r.skeletalMuscle).toBeUndefined();
+    expect(r.confidence).toBe("low");
+  });
+  it("미래 날짜는 버림", () => {
+    expect(validateInbody({ measuredOn: "2999-01-01" }).measuredOn).toBeUndefined();
+  });
+});
+
+describe("validateMealItems", () => {
+  it("이름 없음·전부 0·과대값 정리", () => {
+    const items = validateMealItems([
+      { name: "햇반", grams: 210, kcal: 310, protein: 6, fat: 1, carbs: 69, sodium: 5 },
+      { name: "", kcal: 100 },
+      { name: "물", grams: 500, kcal: 0, protein: 0, fat: 0, carbs: 0 },
+      { name: "폭식", kcal: 999999, protein: -5 },
+    ]);
+    expect(items.map((i) => i.name)).toEqual(["햇반", "폭식"]);
+    expect(items[1].kcal).toBe(10_000);
+    expect(items[1].protein).toBe(0);
+  });
+  it("배열이 아니면 빈 배열, 30개 상한", () => {
+    expect(validateMealItems("x")).toEqual([]);
+    expect(validateMealItems(Array.from({ length: 50 }, (_, i) => ({ name: "a" + i, kcal: 1 }))).length).toBe(30);
+  });
+});

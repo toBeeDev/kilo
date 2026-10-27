@@ -1,3 +1,4 @@
+import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { logAiUsage, type AiCallMeta } from "./ai-usage";

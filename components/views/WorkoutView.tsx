@@ -35,7 +35,7 @@ export default function WorkoutView() {
     } catch {
       /* ignore */
     }
-  }, [today]);
+  }, [today, setDay]);
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [order, setOrder] = useState<string[]>([]); // 오늘 종목 순서 (세트 0개도 유지)
   const [picker, setPicker] = useState(false);

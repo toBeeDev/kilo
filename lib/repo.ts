@@ -78,7 +78,7 @@ const K = {
 };
 export const LOCAL_KEYS = K;
 
-function readMap<T>(key: string): Record<string, T> {
+export function readMap<T>(key: string): Record<string, T> {
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as Record<string, T>) : {};

@@ -94,7 +94,7 @@ export default function MealsView() {
           </div>
         ) : (
           <p className="rounded-[var(--r-md)] px-4 py-3 text-[13px]" style={{ background: "var(--card)", color: "var(--muted)" }}>
-            기록할 때 "☆ 즐겨찾기에 추가" 누르면 여기 쌓여. 다음부턴 탭 한 번에 기록.
+            기록할 때 &ldquo;☆ 즐겨찾기에 추가&rdquo; 누르면 여기 쌓여. 다음부턴 탭 한 번에 기록.
           </p>
         )}
       </section>

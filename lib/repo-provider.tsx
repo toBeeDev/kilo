@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { AuthError, Session, User } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "./config";
+import { clearGuestCookie } from "./guest";
 import { CloudRepo, LocalRepo, type Repo } from "./repo";
 import { supabaseBrowser } from "./supabase/client";
 
@@ -77,7 +78,7 @@ export function RepoProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     if (isSupabaseConfigured()) await supabaseBrowser().auth.signOut();
-    document.cookie = "kilo-guest=; Max-Age=0; path=/";
+    clearGuestCookie();
     window.location.href = "/login";
   };
 

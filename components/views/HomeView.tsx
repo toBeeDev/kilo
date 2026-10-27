@@ -13,7 +13,7 @@ import { muscleScores } from "@/components/Body";
 import { SummaryCard } from "@/components/Daily";
 import { BarsMini, DropIcon, DumbbellIcon, EggIcon, FlameIcon, MacroStrip, RingMini, SparkMini, Tile, WaterChips } from "@/components/Tiles";
 import {
-  SLOTS,
+  fmtDayKo,
   SLOT_LABEL,
   shiftDay,
   todayStr,
@@ -180,8 +180,7 @@ export default function HomeView() {
     await repo.saveSummary(saved);
     setSummary(saved);
   };
-  const d = new Date(day + "T00:00:00");
-  const dayLabel = `${d.getMonth() + 1}월 ${d.getDate()}일 ${"일월화수목금토"[d.getDay()]}`;
+  const dayLabel = fmtDayKo(day);
 
   return (
     <>

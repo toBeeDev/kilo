@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * 서버 전용. 모델 호출 1건당 토큰·비용 로그.
  * stdout JSON 한 줄 → Vercel Logs / 로컬 터미널에서 `ai_usage` 로 검색.

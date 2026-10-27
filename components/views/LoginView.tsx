@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/config";
+import { setGuestCookie } from "@/lib/guest";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Provider = "google" | "kakao";
@@ -33,7 +34,7 @@ export default function LoginView() {
   }
 
   function guest() {
-    document.cookie = "kilo-guest=1; Max-Age=31536000; path=/; SameSite=Lax";
+    setGuestCookie();
     window.location.href = "/";
   }
 

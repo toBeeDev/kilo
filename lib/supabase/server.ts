@@ -1,3 +1,4 @@
+import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";

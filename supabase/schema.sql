@@ -24,29 +24,6 @@ create table if not exists body_metrics (
 );
 
 -- ---------------------------------------------------------------
--- 2. foods — 내 음식 테이블 (가공식품 라벨 + 자주 먹는 것)
---    식약처 DB에서 가져온 것도 여기로 복사해 두고 재사용.
--- ---------------------------------------------------------------
-create table if not exists foods (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references auth.users(id) on delete cascade,
-  name          text not null,                 -- "훈제 닭가슴살 (하림)"
-  brand         text,
-  serving_g     numeric(6,1) not null,          -- 기준 중량
-  serving_label text,                           -- "1팩", "1조각"
-  kcal          numeric(6,1) not null,
-  protein_g     numeric(5,1) not null default 0,
-  fat_g         numeric(5,1) not null default 0,
-  carbs_g       numeric(5,1) not null default 0,
-  fiber_g       numeric(5,1),
-  sodium_mg     numeric(7,1),
-  source        text not null default 'manual' -- manual | mfds | llm
-                check (source in ('manual','mfds','llm')),
-  created_at    timestamptz not null default now()
-);
-create index if not exists foods_user_name_idx on foods (user_id, name);
-
--- ---------------------------------------------------------------
 -- 3. meal_logs — 식사 1건. items는 LLM 파싱 결과 + 유저 확인값.
 -- ---------------------------------------------------------------
 create table if not exists meal_logs (
@@ -141,24 +118,13 @@ create index if not exists workout_sets_user_ex_idx on workout_sets (user_id, ex
 
 -- ---------------------------------------------------------------
 -- 6. daily_summary — 하루 1행. 물(water_ml)·LLM 총평 캐시.
---    (user_id, day) upsert로 씀.
+--    (user_id, day) upsert로 씀. 섭취·운동 합계는 뷰(v_daily_*)로 계산하므로 여기 두지 않는다.
 -- ---------------------------------------------------------------
 create table if not exists daily_summary (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references auth.users(id) on delete cascade,
   day            date not null,
-  target_kcal    integer,
-  target_protein integer,
-  target_fat     integer,
-  target_carbs   integer,
-  actual_kcal    numeric(6,1),
-  actual_protein numeric(5,1),
-  actual_fat     numeric(5,1),
-  actual_carbs   numeric(5,1),
-  sodium_mg      numeric(7,1),
   water_ml       integer,
-  workout_volume_kg numeric(8,1),
-  workout_sets   smallint,
   ai_summary     text,       -- 3줄 총평
   ai_next_step   text,       -- 내일 조정 1개
   ai_model       text,
@@ -170,7 +136,6 @@ create table if not exists daily_summary (
 -- RLS: 전 테이블 본인 row만
 -- ---------------------------------------------------------------
 alter table body_metrics  enable row level security;
-alter table foods         enable row level security;
 alter table meal_logs     enable row level security;
 alter table favorite_meals enable row level security;
 alter table workout_routines enable row level security;
@@ -179,8 +144,6 @@ alter table daily_summary enable row level security;
 
 drop policy if exists "own rows" on body_metrics;
 create policy "own rows" on body_metrics  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-drop policy if exists "own rows" on foods;
-create policy "own rows" on foods         for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "own rows" on meal_logs;
 create policy "own rows" on meal_logs     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "own rows" on favorite_meals;

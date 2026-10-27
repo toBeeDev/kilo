@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
 import { calcTarget } from "@/lib/macros";
-import { shiftDay, todayStr, type DayTotal } from "@/lib/types";
+import { fmtDayKo, shiftDay, todayStr, type DayTotal } from "@/lib/types";
 import Calendar, { monthRange, ymOf } from "@/components/Calendar";
 import { Sheet } from "@/components/ui";
 import { AppHeader } from "@/components/PageHeader";
@@ -31,9 +31,7 @@ export function DayHeader({
   const today = todayStr();
   const isToday = day === today;
   const [open, setOpen] = useState(false);
-  const d = new Date(day + "T00:00:00");
-  const dow = "일월화수목금토"[d.getDay()];
-  const label = isToday ? `오늘, ${d.getMonth() + 1}월 ${d.getDate()}일` : `${d.getMonth() + 1}월 ${d.getDate()}일 ${dow}요일`;
+  const label = isToday ? `오늘, ${fmtDayKo(day, false)}` : fmtDayKo(day);
   const nav = "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[17px] leading-none active:scale-95";
 
   return (

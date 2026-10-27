@@ -139,6 +139,13 @@ export const todayStr = () => {
   return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
 };
 
+const DOW = "일월화수목금토";
+/** "10월 27일 화요일" / withDow=false 면 "10월 27일" */
+export function fmtDayKo(day: string, withDow = true) {
+  const d = new Date(day + "T00:00:00");
+  return `${d.getMonth() + 1}월 ${d.getDate()}일${withDow ? ` ${DOW[d.getDay()]}요일` : ""}`;
+}
+
 export function shiftDay(day: string, delta: number) {
   const d = new Date(day + "T00:00:00");
   d.setDate(d.getDate() + delta);

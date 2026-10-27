@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured } from "@/lib/config";
+import { GUEST_COOKIE, isSupabaseConfigured } from "@/lib/config";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -8,6 +8,6 @@ export async function POST(request: Request) {
     await sb.auth.signOut();
   }
   const res = NextResponse.redirect(new URL("/login", request.url), { status: 303 });
-  res.cookies.set("kilo-guest", "", { maxAge: 0, path: "/" });
+  res.cookies.set(GUEST_COOKIE, "", { maxAge: 0, path: "/" });
   return res;
 }

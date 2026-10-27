@@ -60,7 +60,7 @@ export default function Calendar({
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const today = todayStr();
-  const { first, lastDate, y, m } = monthRange(month);
+  const { lastDate, y, m } = monthRange(month);
   const firstDow = new Date(y, m - 1, 1).getDay(); // 0=일
 
   // 셀 배열: 앞 빈칸 + 날짜

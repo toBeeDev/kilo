@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudRepo, LOCAL_KEYS, LocalRepo } from "./repo";
+import { CloudRepo, LOCAL_KEYS, LocalRepo, readMap } from "./repo";
 import { isUuid, uid, type DaySummary, type FavoriteMeal, type MealLog, type WorkoutRoutine, type WorkoutSet } from "./types";
 
 /**
@@ -141,13 +141,4 @@ export async function migrateLocalToCloud(
   for (const k of Object.values(LOCAL_KEYS)) localStorage.removeItem(k);
   localStorage.setItem(FLAG, new Date().toISOString());
   return counts;
-}
-
-function readMap<T>(key: string): Record<string, T> {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Record<string, T>) : {};
-  } catch {
-    return {};
-  }
 }

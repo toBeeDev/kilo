@@ -1,3 +1,4 @@
+import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -181,3 +182,6 @@ export function errorResponse(e: unknown): NextResponse {
   }
   return NextResponse.json({ error: msg.slice(0, 300) }, { status: 500 });
 }
+
+/** 테스트용. 라우트에서는 guard()만 쓴다. */
+export const _internal = { parseQuota, serializeQuota, hitBurst, todayKey };

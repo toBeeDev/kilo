@@ -15,6 +15,7 @@
 npm install
 npm run dev      # http://localhost:3000
 npm test
+npm run lint     # eslint (next/core-web-vitals + typescript)
 ```
 
 **키 없이도 돌아감.** Supabase 없으면 "이 기기에만 저장"(localStorage) 모드, AI 키 없으면 식단·인바디는 수동 입력.
@@ -62,8 +63,8 @@ iOS는 홈 화면에 추가한 앱에서 OAuth를 시작하면 Safari로 빠져�
 
 **2. 스키마**
 - SQL Editor → New query → `supabase/schema.sql` 전체 붙여넣기 → Run.
-- 만들어지는 것: 테이블 7개(`body_metrics`, `foods`, `meal_logs`, `favorite_meals`, `workout_routines`, `workout_sets`, `daily_summary`) + RLS(본인 row만) + 집계 뷰 2개 + `touch_*` 함수 2개 + 사진 버킷 `meal-photos`.
-- 확인: Table Editor에 테이블 7개, Storage에 `meal-photos` 버킷이 보이면 끝. 두 번 실행해도 안전(`if not exists`).
+- 만들어지는 것: 테이블 6개(`body_metrics`, `meal_logs`, `favorite_meals`, `workout_routines`, `workout_sets`, `daily_summary`) + RLS(본인 row만) + 집계 뷰 2개 + `touch_*` 함수 2개 + 사진 버킷 `meal-photos`.
+- 확인: Table Editor에 테이블 6개, Storage에 `meal-photos` 버킷이 보이면 끝. 두 번 실행해도 안전(`if not exists`).
 - 사진 버킷은 **비공개**다. 읽기·쓰기·삭제 모두 본인 폴더(`<user-id>/…`)만 허용하고, 앱은 1시간짜리 서명 URL로 보여준다. jpeg 5MB 제한. 기록을 지우거나 사진을 다시 찍으면 예전 파일도 같이 지운다.
 
 **3. 로그인 제공자** (Authentication → Providers)

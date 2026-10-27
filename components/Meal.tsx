@@ -49,7 +49,7 @@ export function MealPhoto({
   // 음식 칩은 사진 하단에 한 줄로 모아서. 위치 검출은 안 함.
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ borderRadius: rounded }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img src={src} alt="" className="block h-full w-full object-cover" />
       {items.length > 0 && (
         <div
@@ -486,7 +486,7 @@ export function FavoriteCard({
         style={{ border: "1px solid var(--line)" }}
       >
         {fav.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img src={fav.photo} alt="" className="aspect-[4/3] w-full object-cover" />
         ) : (
           <div className="flex aspect-[4/3] w-full flex-wrap content-start gap-1 overflow-hidden p-2" style={{ background: "var(--card-2)" }}>

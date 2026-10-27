@@ -36,10 +36,10 @@ export function ExerciseDemo({
   }
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ background: "var(--ink)", borderRadius: rounded }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img src={a} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" onError={() => setBroken(true)} />
       {!still && (
-        // eslint-disable-next-line @next/next/no-img-element
+         
         <img src={b} alt="" className="demo-frame-b absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
       )}
     </div>
