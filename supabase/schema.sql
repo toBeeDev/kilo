@@ -219,15 +219,22 @@ from workout_sets
 group by user_id, done_on;
 
 -- ---------------------------------------------------------------
--- Storage: 식단 사진. 공개 읽기(링크 아는 사람만), 쓰기는 본인 폴더만.
+-- Storage: 식단 사진. 비공개 버킷. 읽기·쓰기·삭제 전부 본인 폴더(<user_id>/...)만.
+-- 앱은 createSignedUrl(1시간)로 표시한다. jpeg 5MB 제한.
 -- ---------------------------------------------------------------
-insert into storage.buckets (id, name, public)
-values ('meal-photos', 'meal-photos', true)
-on conflict (id) do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('meal-photos', 'meal-photos', false, 5242880, array['image/jpeg'])
+on conflict (id) do update
+  set public = false, file_size_limit = 5242880, allowed_mime_types = array['image/jpeg'];
 
 drop policy if exists "photos: read" on storage.objects;
-create policy "photos: read" on storage.objects for select
-  using (bucket_id = 'meal-photos');
+drop policy if exists "photos: read own folder" on storage.objects;
+create policy "photos: read own folder" on storage.objects for select
+  using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "photos: update own folder" on storage.objects;
+create policy "photos: update own folder" on storage.objects for update
+  using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 drop policy if exists "photos: write own folder" on storage.objects;
 create policy "photos: write own folder" on storage.objects for insert
   with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);

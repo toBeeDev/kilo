@@ -159,7 +159,7 @@ export function SetLogger({
     if (!open || !exerciseId) return;
     let alive = true;
     (async () => {
-      const prev = await repo.lastSets(exerciseId, day);
+      const prev = await repo.lastSets(exerciseId, day).catch(() => [] as WorkoutSet[]);
       if (!alive) return;
       setLast(prev);
       const seed = sets.at(-1) ?? prev[0];

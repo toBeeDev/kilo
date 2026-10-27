@@ -99,10 +99,14 @@ function DayPickerSheet({
 
   const load = useCallback(async () => {
     const { first, last } = monthRange(month);
-    const [rows, body] = await Promise.all([repo.dailyTotals(shiftDay(first, -14), last), repo.listBody()]);
-    setTotals(new Map(rows.map((r) => [r.day, r])));
-    const latest = body[0];
-    setTarget(latest ? calcTarget(latest, latest.goal, latest.activity, latest.adjustmentKcal).kcal : null);
+    try {
+      const [rows, body] = await Promise.all([repo.dailyTotals(shiftDay(first, -14), last), repo.listBody()]);
+      setTotals(new Map(rows.map((r) => [r.day, r])));
+      const latest = body[0];
+      setTarget(latest ? calcTarget(latest, latest.goal, latest.activity, latest.adjustmentKcal).kcal : null);
+    } catch {
+      setTotals(new Map()); // 달력 점은 장식. 실패해도 날짜 선택은 되게.
+    }
   }, [repo, month]);
 
   useEffect(() => {

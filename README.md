@@ -31,6 +31,21 @@ npm test
 | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` | SSO 로그인 + 클라우드 저장 | 로컬 저장 |
 | `MFDS_API_KEY` | 식약처 식품영양성분DB 검색 (음식 행의 "DB" 버튼) | AI 추정값만 |
 | `NEXT_PUBLIC_SITE_URL` | SEO canonical/OG 주소 | Vercel 도메인 → localhost 추정 |
+| `AI_DAILY_PHOTO_LIMIT` / `AI_DAILY_SUMMARY_LIMIT` / `FOOD_DAILY_LIMIT` | 브라우저별 일일 상한 (기본 20 / 3 / 100) | 기본값 |
+| `AI_LIMIT_SECRET` | 사용량 쿠키 서명 키 | AI 키에서 파생 |
+| `AI_ALLOW_GUEST` | Supabase 켠 상태에서 게스트에게도 AI 허용 (`1`) | 로그인 사용자만 |
+
+### API 보호와 비용
+
+`/api/*` 는 로그인 세션이나 게스트 쿠키가 없으면 401. Supabase를 켜면 사진 분석·총평은 **로그인 사용자만** 쓸 수 있다(게스트는 403, `AI_ALLOW_GUEST=1`이면 허용). 그 위에 IP당 분당 버스트 제한, 브라우저별 일일 상한(서명 쿠키 `kilo-ai-quota`, 한국 시간 자정 리셋)이 걸린다. 한도에 닿으면 429와 안내 문구.
+
+모델을 부를 때마다 stdout에 JSON 한 줄을 남긴다 — Vercel Logs나 터미널에서 `ai_usage` 로 찾으면 된다.
+
+```json
+{"t":"ai_usage","at":"…","route":"meal/parse","who":"user:1a2b3c4d","provider":"gemini","model":"gemini-2.5-flash","in":1843,"out":212,"ms":2210,"ok":true,"usd":0.001083}
+```
+
+`usd` 는 `lib/ai-usage.ts` 의 단가표로 계산한 추정치다. 월 예산 감은 여기서 잡으면 된다.
 
 식약처 키: [공공데이터포털](https://www.data.go.kr/data/15127578/openapi.do) → "식품의약품안전처_식품영양성분DB정보" 활용신청(개발계정 자동승인) → 일반 인증키 **Decoding** 값. 응답 필드 매핑(`AMT_NUM1` 에너지 등)은 `lib/mfds.ts` 상단 `FIELD` 한 곳 — 첫 검색에서 사과 단백질이 10g 넘게 나오면 거기 고치면 됨.
 
@@ -45,7 +60,7 @@ npm test
 - SQL Editor → New query → `supabase/schema.sql` 전체 붙여넣기 → Run.
 - 만들어지는 것: 테이블 7개(`body_metrics`, `foods`, `meal_logs`, `favorite_meals`, `workout_routines`, `workout_sets`, `daily_summary`) + RLS(본인 row만) + 집계 뷰 2개 + `touch_*` 함수 2개 + 사진 버킷 `meal-photos`.
 - 확인: Table Editor에 테이블 7개, Storage에 `meal-photos` 버킷이 보이면 끝. 두 번 실행해도 안전(`if not exists`).
-- 사진 버킷은 **공개 읽기**(링크 아는 사람만)다. 비공개로 두려면 `schema.sql` 맨 아래 `public` 을 `false` 로 바꾸고, 앱의 `CloudRepo.uploadPhoto` 를 서명 URL 방식으로 바꿔야 한다(이슈로 남김).
+- 사진 버킷은 **비공개**다. 읽기·쓰기·삭제 모두 본인 폴더(`<user-id>/…`)만 허용하고, 앱은 1시간짜리 서명 URL로 보여준다. jpeg 5MB 제한. 기록을 지우거나 사진을 다시 찍으면 예전 파일도 같이 지운다.
 
 **3. 로그인 제공자** (Authentication → Providers)
 - **Kakao**: [developers.kakao.com](https://developers.kakao.com) → 앱 만들기 → 앱 키의 **REST API 키** = Client ID, 보안 → **Client Secret** 생성·활성화 = Client Secret. 카카오 로그인 → 활성화 ON, Redirect URI에 Supabase가 보여주는 `https://<ref>.supabase.co/auth/v1/callback` 등록. 동의항목에서 닉네임·프로필 사진(선택)·이메일(선택) 켜기.
@@ -63,7 +78,7 @@ npm test
 
 **6. 확인**
 - `/login` 에서 Kakao/Google 로그인 → 홈으로 돌아오고 마이 탭에 "클라우드 저장"이 보이면 성공.
-- 게스트로 쓰던 기록이 있으면 마이 탭에 "이 기기에 남은 기록" 카드가 뜬다 → "클라우드로 옮기기" 한 번 (인바디·식사·세트·즐겨찾기·루틴 전부).
+- 게스트로 쓰던 기록이 있으면 마이 탭에 "이 기기에 남은 기록" 카드가 뜬다 → "클라우드로 옮기기" 한 번 (인바디·식사·세트·즐겨찾기·루틴 전부). 중간에 끊겨도 다시 누르면 같은 id로 덮어써서 중복이 안 생긴다.
 - 사진 기록 한 번 올려서 Storage → `meal-photos/<user-id>/` 에 파일이 생기는지 본다.
 
 로그인 전에는 `/login`으로 보내고, "로그인 없이 쓰기" 누르면 게스트 쿠키로 통과. 로그인하면 `CloudRepo`, 아니면 `LocalRepo` — UI는 `lib/repo.ts` 인터페이스만 본다.

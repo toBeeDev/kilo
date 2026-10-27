@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import { apiFetch } from "@/lib/http";
+import { errorText, useToast } from "@/components/Toast";
 import { GOAL_LABEL, calcTarget, waterTarget } from "@/lib/macros";
 import { MUSCLE_KO, exercise } from "@/lib/exercises";
 import { muscleScores } from "@/components/Body";
@@ -30,6 +32,7 @@ import { Button, Card } from "@/components/ui";
 export default function HomeView() {
   const { repo, ready, user } = useRepo();
   const router = useRouter();
+  const toast = useToast();
   const name = (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "게스트") as string;
   const today = todayStr();
   const [day, setDay] = useState(today);
@@ -45,24 +48,32 @@ export default function HomeView() {
 
   const loadMonth = useCallback(async () => {
     const { first, last } = monthRange(month);
-    const rows = await repo.dailyTotals(shiftDay(first, -14), last);
-    setTotals(new Map(rows.map((r) => [r.day, r])));
-  }, [repo, month]);
+    try {
+      const rows = await repo.dailyTotals(shiftDay(first, -14), last);
+      setTotals(new Map(rows.map((r) => [r.day, r])));
+    } catch (e) {
+      toast(errorText(e, "달력을 못 불러왔어."));
+    }
+  }, [repo, month, toast]);
 
   const loadDay = useCallback(async () => {
-    const [b, m, s, w, sm] = await Promise.all([
-      repo.listBody(),
-      repo.listMeals(day),
-      repo.listSets(day),
-      repo.getWater(day),
-      repo.getSummary(day),
-    ]);
-    setLatest(b[0] ?? null);
-    setMeals(m);
-    setSets(s);
-    setWater(w);
-    setSummary(sm);
-  }, [repo, day]);
+    try {
+      const [b, m, s, w, sm] = await Promise.all([
+        repo.listBody(),
+        repo.listMeals(day),
+        repo.listSets(day),
+        repo.getWater(day),
+        repo.getSummary(day),
+      ]);
+      setLatest(b[0] ?? null);
+      setMeals(m);
+      setSets(s);
+      setWater(w);
+      setSummary(sm);
+    } catch (e) {
+      toast(errorText(e, "기록을 못 불러왔어."));
+    }
+  }, [repo, day, toast]);
 
   useEffect(() => {
     if (ready) loadMonth();
@@ -114,8 +125,14 @@ export default function HomeView() {
   const emptyPast = !isToday && !meals.length && !sets.length;
 
   const onWater = async (ml: number) => {
+    const before = water;
     setWater(ml);
-    await repo.setWater(day, ml);
+    try {
+      await repo.setWater(day, ml);
+    } catch (e) {
+      setWater(before);
+      toast(errorText(e, "물 기록을 저장 못 했어."));
+    }
   };
 
   const generateSummary = async () => {
@@ -146,9 +163,11 @@ export default function HomeView() {
       workout: sets.length ? { volume: Math.round(volume), sets: sets.length, lines, muscles } : null,
       body: latest ? { weight: latest.weight, bodyFatPct: latest.bodyFatPct, skeletalMuscle: latest.skeletalMuscle } : null,
     };
-    const res = await fetch("/api/summary", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error ?? "총평 실패");
+    const json = await apiFetch<{ summary: string; nextStep: string; model?: string }>("/api/summary", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
     const saved: DaySummary = { day, summary: json.summary, nextStep: json.nextStep, model: json.model, generatedAt: new Date().toISOString() };
     await repo.saveSummary(saved);
     setSummary(saved);
@@ -406,6 +425,7 @@ export default function HomeView() {
         slot={sheet?.slot}
         existing={sheet?.existing}
         onSaved={reload}
+        onDeleted={reload}
       />
     </>
   );

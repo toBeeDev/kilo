@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import { errorText, useToast } from "@/components/Toast";
 import { MUSCLE_KO, exercise, type Exercise } from "@/lib/exercises";
 import { WORKOUT_DAY_KEY, shiftDay, todayStr, type WorkoutSet } from "@/lib/types";
 import { BodyMap, muscleScores } from "@/components/Body";
@@ -24,6 +25,7 @@ export default function WorkoutView() {
 
 function WorkoutInner() {
   const { repo, ready } = useRepo();
+  const toast = useToast();
   const today = todayStr();
   const [day, setDay] = useState(today);
   const isToday = day === today;
@@ -50,14 +52,18 @@ function WorkoutInner() {
   const [history, setHistory] = useState<WorkoutSet[]>([]); // 최근 8주
 
   const load = useCallback(async () => {
-    const [s, h] = await Promise.all([repo.listSets(day), repo.setsInRange(shiftDay(day, -62), day)]);
-    setSets(s);
-    setOrder((o) => {
-      const fromSets = [...new Set(s.map((x) => x.exerciseId))];
-      return [...fromSets, ...o.filter((id) => !fromSets.includes(id))];
-    });
-    setHistory(h);
-  }, [repo, day]);
+    try {
+      const [s, h] = await Promise.all([repo.listSets(day), repo.setsInRange(shiftDay(day, -62), day)]);
+      setSets(s);
+      setOrder((o) => {
+        const fromSets = [...new Set(s.map((x) => x.exerciseId))];
+        return [...fromSets, ...o.filter((id) => !fromSets.includes(id))];
+      });
+      setHistory(h);
+    } catch (e) {
+      toast(errorText(e, "운동 기록을 못 불러왔어."));
+    }
+  }, [repo, day, toast]);
 
   // 날짜 바뀌면 종목 순서 초기화 (오늘 종목이 과거 날짜에 남지 않게)
   useEffect(() => {
@@ -78,19 +84,29 @@ function WorkoutInner() {
 
   const setsOf = (id: string) => sets.filter((s) => s.exerciseId === id);
 
-  // 세트 변경 = 즉시 저장 (삭제분은 diff로)
+  // 세트 변경 = 즉시 저장 (삭제분은 diff로). 실패하면 화면을 저장 전으로 되돌린다.
   const onSetsChange = async (id: string, next: WorkoutSet[]) => {
+    const snapshot = sets;
     const before = setsOf(id);
     const removed = before.filter((b) => !next.some((n) => n.id === b.id));
     setSets((cur) => [...cur.filter((s) => s.exerciseId !== id), ...next]);
-    await Promise.all([repo.saveSets(next), ...removed.map((r) => repo.deleteSet(r.id))]);
-    setHistory(await repo.setsInRange(shiftDay(day, -62), day));
+    try {
+      await Promise.all([repo.saveSets(next), ...removed.map((r) => repo.deleteSet(r.id))]);
+      setHistory(await repo.setsInRange(shiftDay(day, -62), day));
+    } catch (e) {
+      setSets(snapshot);
+      toast(errorText(e, "세트를 저장 못 했어."));
+    }
   };
 
   const removeExercise = async (id: string) => {
-    await Promise.all(setsOf(id).map((s) => repo.deleteSet(s.id)));
-    setSets((cur) => cur.filter((s) => s.exerciseId !== id));
-    setOrder((o) => o.filter((x) => x !== id));
+    try {
+      await Promise.all(setsOf(id).map((s) => repo.deleteSet(s.id)));
+      setSets((cur) => cur.filter((s) => s.exerciseId !== id));
+      setOrder((o) => o.filter((x) => x !== id));
+    } catch (e) {
+      toast(errorText(e, "종목을 지우지 못했어."));
+    }
   };
 
   const volume = sets.reduce((v, s) => v + s.weight * s.reps, 0);

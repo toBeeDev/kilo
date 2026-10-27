@@ -66,7 +66,7 @@ export async function searchFood(q: string, rows = 20): Promise<FoodHit[]> {
   url.searchParams.set("numOfRows", String(rows));
   url.searchParams.set("type", "json");
 
-  const res = await fetch(url, { next: { revalidate: 60 * 60 * 24 } });
+  const res = await fetch(url, { next: { revalidate: 60 * 60 * 24 }, signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`식약처 API ${res.status}`);
   const text = await res.text();
   let json: unknown;

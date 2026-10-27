@@ -159,3 +159,13 @@ input[type="number"]::-webkit-outer-spin-button {
 .sheet-enter {
   animation: sheet-up 0.22s ease-out both;
 }
+
+/* 토스트: opacity 애니메이션 없음 — 백그라운드 탭에서 애니메이션이 멈춰도 항상 보이게 */
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+  }
+}
+.toast-enter {
+  animation: toast-in 0.2s ease-out;
+}

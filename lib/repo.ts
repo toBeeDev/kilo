@@ -4,6 +4,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BodyRecord, DaySummary, DayTotal, FavoriteMeal, MealLog, WorkoutRoutine, WorkoutSet } from "./types";
 import { uid } from "./types";
 
+/** 사진 저장 결과. photo는 표시용 URL, photoPath는 클라우드 Storage 경로(로컬은 없음). */
+export interface PhotoRef {
+  photo: string;
+  photoPath?: string;
+}
+/** 서명 URL 유효시간. 화면을 다시 불러올 때마다 새로 받는다. */
+const SIGNED_URL_TTL = 60 * 60;
+const BUCKET = "meal-photos";
+
 /**
  * 저장소 추상화.
  * - LocalRepo: localStorage. 키/로그인 없이 지금 당장 동작.
@@ -47,8 +56,11 @@ export interface Repo {
   getSummary(day: string): Promise<DaySummary | null>;
   saveSummary(s: DaySummary): Promise<void>;
 
-  /** 사진 저장. 로컬은 data URL 그대로, 클라우드는 Storage URL 반환. */
-  uploadPhoto(dataUrl: string, blob: Blob): Promise<string>;
+  /** 사진 저장. 로컬은 data URL 그대로, 클라우드는 비공개 버킷에 올리고 서명 URL + 경로 반환.
+   *  key를 주면 그 이름으로 덮어쓴다 (이관 재시도 때 중복 방지). */
+  uploadPhoto(dataUrl: string, blob: Blob, key?: string): Promise<PhotoRef>;
+  /** 사진 삭제. 로컬은 no-op. 실패해도 던지지 않는다 (고아 파일은 기록 삭제보다 덜 나쁘다). */
+  deletePhoto(path: string | undefined): Promise<void>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -280,9 +292,10 @@ export class LocalRepo implements Repo {
     localStorage.setItem(K.summary, JSON.stringify(m));
   }
 
-  async uploadPhoto(dataUrl: string) {
-    return dataUrl;
+  async uploadPhoto(dataUrl: string): Promise<PhotoRef> {
+    return { photo: dataUrl };
   }
+  async deletePhoto() {}
 }
 
 /* ------------------------------------------------------------------ */
@@ -351,7 +364,7 @@ export class CloudRepo implements Repo {
       eatenOn: r.eaten_on as string,
       slot: r.slot as MealLog["slot"],
       rawInput: (r.raw_input as string) ?? undefined,
-      photo: (r.photo_path as string) ?? undefined,
+      photoPath: (r.photo_path as string) ?? undefined,
       items: (r.items as MealLog["items"]) ?? [],
       kcal: Number(r.kcal),
       protein: Number(r.protein_g),
@@ -367,7 +380,7 @@ export class CloudRepo implements Repo {
       .eq("eaten_on", day)
       .order("created_at");
     if (error) throw error;
-    return (data as Row[]).map((r) => this.mealFrom(r));
+    return this.withPhotos((data as Row[]).map((r) => this.mealFrom(r)));
   }
   async recentMeals(limit: number) {
     const { data, error } = await this.sb
@@ -377,7 +390,7 @@ export class CloudRepo implements Repo {
       .order("eaten_on", { ascending: false })
       .limit(limit);
     if (error) throw error;
-    return (data as Row[]).map((r) => this.mealFrom(r));
+    return this.withPhotos((data as Row[]).map((r) => this.mealFrom(r)));
   }
   async saveMeal(m: Omit<MealLog, "id"> & { id?: string }) {
     const { data, error } = await this.sb
@@ -388,7 +401,7 @@ export class CloudRepo implements Repo {
         eaten_on: m.eatenOn,
         slot: m.slot,
         raw_input: m.rawInput ?? null,
-        photo_path: m.photo ?? null,
+        photo_path: m.photoPath ?? null,
         items: m.items,
         kcal: m.kcal,
         protein_g: m.protein,
@@ -399,18 +412,21 @@ export class CloudRepo implements Repo {
       .select()
       .single();
     if (error) throw error;
-    return this.mealFrom(data as Row);
+    const [row] = await this.withPhotos([this.mealFrom(data as Row)]);
+    return row;
   }
   async deleteMeal(id: string) {
+    const { data } = await this.sb.from("meal_logs").select("photo_path").eq("id", id).maybeSingle();
     const { error } = await this.sb.from("meal_logs").delete().eq("id", id);
     if (error) throw error;
+    await this.deletePhoto((data as Row | null)?.photo_path as string | undefined);
   }
 
   private favFrom(r: Row): FavoriteMeal {
     return {
       id: r.id as string,
       name: r.name as string,
-      photo: (r.photo_path as string) ?? undefined,
+      photoPath: (r.photo_path as string) ?? undefined,
       items: (r.items as FavoriteMeal["items"]) ?? [],
       kcal: Number(r.kcal),
       protein: Number(r.protein_g),
@@ -428,7 +444,7 @@ export class CloudRepo implements Repo {
       .order("use_count", { ascending: false })
       .order("last_used_at", { ascending: false, nullsFirst: false });
     if (error) throw error;
-    return (data as Row[]).map((r) => this.favFrom(r));
+    return this.withPhotos((data as Row[]).map((r) => this.favFrom(r)));
   }
   async saveFavorite(f: Omit<FavoriteMeal, "id" | "useCount" | "lastUsed"> & { id?: string }) {
     const { data, error } = await this.sb
@@ -437,7 +453,7 @@ export class CloudRepo implements Repo {
         ...(f.id ? { id: f.id } : {}),
         user_id: this.userId,
         name: f.name,
-        photo_path: f.photo ?? null,
+        photo_path: f.photoPath ?? null,
         items: f.items,
         kcal: f.kcal,
         protein_g: f.protein,
@@ -448,15 +464,18 @@ export class CloudRepo implements Repo {
       .select()
       .single();
     if (error) throw error;
-    return this.favFrom(data as Row);
+    const [row] = await this.withPhotos([this.favFrom(data as Row)]);
+    return row;
   }
   async touchFavorite(id: string) {
     const { error } = await this.sb.rpc("touch_favorite_meal", { fav_id: id });
     if (error) throw error;
   }
   async deleteFavorite(id: string) {
+    const { data } = await this.sb.from("favorite_meals").select("photo_path").eq("id", id).maybeSingle();
     const { error } = await this.sb.from("favorite_meals").delete().eq("id", id);
     if (error) throw error;
+    await this.deletePhoto((data as Row | null)?.photo_path as string | undefined);
   }
 
   private routineFrom(r: Row): WorkoutRoutine {
@@ -643,12 +662,38 @@ export class CloudRepo implements Repo {
     if (error) throw error;
   }
 
-  async uploadPhoto(_dataUrl: string, blob: Blob) {
-    const path = `${this.userId}/${uid()}.jpg`;
-    const { error } = await this.sb.storage
-      .from("meal-photos")
-      .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  /* ---------- 사진 (비공개 버킷 + 서명 URL) ---------- */
+
+  /** photoPath → 1시간짜리 서명 URL. 옛 데이터가 절대 URL이면 그대로 둔다. */
+  private async withPhotos<T extends { photo?: string; photoPath?: string }>(rows: T[]): Promise<T[]> {
+    const paths = [...new Set(rows.map((r) => r.photoPath).filter((p): p is string => !!p && !p.startsWith("http")))];
+    const urls = new Map<string, string>();
+    if (paths.length) {
+      const { data } = await this.sb.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_TTL);
+      for (const d of data ?? []) if (d.path && d.signedUrl) urls.set(d.path, d.signedUrl);
+    }
+    return rows.map((r) => {
+      if (!r.photoPath) return r;
+      if (r.photoPath.startsWith("http")) return { ...r, photo: r.photoPath };
+      const u = urls.get(r.photoPath);
+      return u ? { ...r, photo: u } : r;
+    });
+  }
+
+  async uploadPhoto(_dataUrl: string, blob: Blob, key?: string): Promise<PhotoRef> {
+    const path = `${this.userId}/${key ?? uid()}.jpg`;
+    const { error } = await this.sb.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: !!key });
     if (error) throw error;
-    return this.sb.storage.from("meal-photos").getPublicUrl(path).data.publicUrl;
+    const { data, error: signErr } = await this.sb.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL);
+    if (signErr) throw signErr;
+    return { photo: data.signedUrl, photoPath: path };
+  }
+  async deletePhoto(path: string | undefined) {
+    if (!path || path.startsWith("http")) return;
+    try {
+      await this.sb.storage.from(BUCKET).remove([path]);
+    } catch {
+      /* 고아 파일은 다음 삭제 때 함께 치우지 않아도 기록 자체엔 영향 없음 */
+    }
   }
 }

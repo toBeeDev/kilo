@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import { errorText, useToast } from "@/components/Toast";
 import { SLOTS, SLOT_LABEL, todayStr, type FavoriteMeal, type MealLog } from "@/lib/types";
 import { FavoriteCard, MealPhoto, MealSheet } from "@/components/Meal";
 import { MacroRatioBar } from "@/components/Nutrition";
@@ -11,6 +12,7 @@ import { DayHeader } from "@/components/DayNav";
 
 export default function MealsView() {
   const { repo, ready } = useRepo();
+  const toast = useToast();
   const today = todayStr();
   const [day, setDay] = useState(today);
   const isToday = day === today;
@@ -20,10 +22,14 @@ export default function MealsView() {
   const [sheet, setSheet] = useState<{ existing?: MealLog; preset?: FavoriteMeal } | null>(null);
 
   const load = useCallback(async () => {
-    const [m, f] = await Promise.all([repo.listMeals(day), repo.listFavorites()]);
-    setMeals(m);
-    setFavs(f);
-  }, [repo, day]);
+    try {
+      const [m, f] = await Promise.all([repo.listMeals(day), repo.listFavorites()]);
+      setMeals(m);
+      setFavs(f);
+    } catch (e) {
+      toast(errorText(e, "식단을 못 불러왔어."));
+    }
+  }, [repo, day, toast]);
   useEffect(() => {
     if (ready) load();
   }, [ready, load]);
@@ -69,7 +75,12 @@ export default function MealsView() {
                 onDelete={
                   editFavs
                     ? async () => {
-                        await repo.deleteFavorite(f.id);
+                        if (!confirm(`"${f.name}" 즐겨찾기를 지울까?`)) return;
+                        try {
+                          await repo.deleteFavorite(f.id);
+                        } catch (e) {
+                          toast(errorText(e, "즐겨찾기를 지우지 못했어."));
+                        }
                         load();
                       }
                     : undefined
@@ -146,6 +157,7 @@ export default function MealsView() {
         existing={sheet?.existing}
         preset={sheet?.preset}
         onSaved={load}
+        onDeleted={load}
       />
     </>
   );

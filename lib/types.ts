@@ -64,7 +64,8 @@ export interface MealLog {
   eatenOn: string; // YYYY-MM-DD
   slot: MealSlot;
   rawInput?: string;
-  photo?: string; // data URL (local) or public URL (cloud)
+  photo?: string; // 표시용. data URL (local) 또는 서명 URL (cloud, 1시간)
+  photoPath?: string; // cloud 전용. Storage 경로 (삭제·재서명용)
   items: MealItem[];
   kcal: number;
   protein: number;
@@ -78,6 +79,7 @@ export interface FavoriteMeal {
   id: string;
   name: string;
   photo?: string;
+  photoPath?: string;
   items: MealItem[];
   kcal: number;
   protein: number;
@@ -144,10 +146,24 @@ export function shiftDay(day: string, delta: number) {
   return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
 }
 
-export const uid = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+/**
+ * 항상 RFC 4122 v4 UUID. 클라우드 테이블 id가 uuid 타입이라 다른 형식은 저장이 실패한다.
+ * crypto.randomUUID는 https/localhost에서만 있다 (폰에서 http://<맥IP> 로 열면 없음) → getRandomValues로 직접 만든다.
+ */
+export function uid(): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  const b = new Uint8Array(16);
+  if (c && typeof c.getRandomValues === "function") c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = (Math.random() * 256) | 0;
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+export const isUuid = (v: unknown): v is string =>
+  typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 
 /** 홈 달력 → 운동 탭으로 과거 날짜 넘길 때 쓰는 sessionStorage 키 */
 export const WORKOUT_DAY_KEY = "kilo:workout-day";

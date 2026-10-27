@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import type { PhotoRef } from "@/lib/repo";
+import { apiFetch } from "@/lib/http";
 import { downscale, thumbnail } from "@/lib/image";
 import {
   SLOTS,
@@ -94,6 +96,7 @@ export function MealSheet({
   existing,
   preset,
   onSaved,
+  onDeleted,
 }: {
   open: boolean;
   onClose: () => void;
@@ -103,6 +106,8 @@ export function MealSheet({
   /** 즐겨찾기에서 바로 열 때 */
   preset?: FavoriteMeal;
   onSaved: (m: MealLog) => void;
+  /** 기존 기록 삭제 후 (existing 있을 때만 버튼이 뜬다) */
+  onDeleted?: () => void;
 }) {
   const { repo } = useRepo();
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -157,14 +162,28 @@ export function MealSheet({
     return names.length > 3 ? `${names.slice(0, 3).join(", ")} 외 ${names.length - 3}` : names.join(", ");
   }
 
+  /**
+   * 지금 화면의 사진을 저장 가능한 참조로. 클라우드에선 기록마다 파일을 따로 가진다
+   * (즐겨찾기 사진을 식사에 쓰면 복사) — 한쪽을 지워도 다른 쪽이 깨지지 않게.
+   */
+  async function persistPhoto(forFavorite = false): Promise<PhotoRef | null> {
+    if (!photo) return null;
+    if (blob) return repo.uploadPhoto(photo, blob); // 새로 찍은 사진
+    if (!forFavorite && existing?.photo === photo) return { photo, photoPath: existing.photoPath }; // 그대로
+    if (repo.mode === "cloud") {
+      const copy = await (await fetch(photo)).blob(); // 즐겨찾기 등 다른 기록의 사진 → 복사
+      return repo.uploadPhoto(photo, copy);
+    }
+    return { photo };
+  }
+
   async function saveFavorite() {
     const name = (favName ?? "").trim() || defaultFavName();
     if (!name) return;
     try {
-      let photoUrl = photo;
-      if (blob && photo) photoUrl = await repo.uploadPhoto(photo, blob);
+      const ref = await persistPhoto(true);
       const sum = sumItems(items);
-      const saved = await repo.saveFavorite({ name, photo: photoUrl, items: items.filter((i) => i.name.trim()), ...sum });
+      const saved = await repo.saveFavorite({ name, photo: ref?.photo, photoPath: ref?.photoPath, items: items.filter((i) => i.name.trim()), ...sum });
       setFavs((cur) => [saved, ...cur.filter((x) => x.id !== saved.id)]);
       setFromFav(saved);
       setFavName(null);
@@ -196,10 +215,8 @@ export function MealSheet({
         form.append("image", small.blob, "meal.jpg");
       }
       if (text.trim()) form.append("text", text.trim());
-      const res = await fetch("/api/meal/parse", { method: "POST", body: form });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "분석 실패");
-      setItems(((json.items ?? []) as MealItem[]).map((i) => ({ ...i, source: "ai" as const })));
+      const json = await apiFetch<{ items?: MealItem[]; note?: string }>("/api/meal/parse", { method: "POST", body: form });
+      setItems((json.items ?? []).map((i) => ({ ...i, source: "ai" as const })));
       setNote(json.note);
       setStage("review");
     } catch (e) {
@@ -213,19 +230,35 @@ export function MealSheet({
   async function save() {
     setSaving(true);
     try {
-      let photoUrl = photo;
-      if (blob && photo) photoUrl = await repo.uploadPhoto(photo, blob);
+      const ref = await persistPhoto();
       const sum = sumItems(items);
       const saved = await repo.saveMeal({
         id: existing?.id,
         eatenOn: day,
         slot,
         rawInput: text.trim() || undefined,
-        photo: photoUrl,
+        photo: ref?.photo,
+        photoPath: ref?.photoPath,
         items: items.filter((i) => i.name.trim()),
         ...sum,
       });
+      // 사진을 바꿨거나 뺐으면 예전 파일 정리
+      if (existing?.photoPath && existing.photoPath !== ref?.photoPath) await repo.deletePhoto(existing.photoPath);
       onSaved(saved);
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!existing || !confirm(`${SLOT_LABEL[existing.slot]} 기록을 지울까?`)) return;
+    setSaving(true);
+    try {
+      await repo.deleteMeal(existing.id);
+      onDeleted?.();
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -421,6 +454,11 @@ export function MealSheet({
               {saving ? "저장 중…" : "저장"}
             </Button>
           </div>
+          {existing && (
+            <button type="button" className="mt-3 w-full py-2 text-[13px]" style={{ color: "var(--danger)" }} onClick={remove} disabled={saving}>
+              이 기록 삭제
+            </button>
+          )}
         </div>
       )}
     </Sheet>
@@ -604,9 +642,7 @@ function FoodSearchSheet({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/food/search?q=${encodeURIComponent(t)}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "검색 실패");
+      const json = await apiFetch<{ hits?: FoodHit[] }>(`/api/food/search?q=${encodeURIComponent(t)}`, {}, 15_000);
       setHits(json.hits ?? []);
     } catch (e) {
       setError((e as Error).message);

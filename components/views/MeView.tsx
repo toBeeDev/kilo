@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import { errorText, useToast } from "@/components/Toast";
 import { isSupabaseConfigured } from "@/lib/config";
 import { GOAL_LABEL } from "@/lib/macros";
 import type { BodyRecord } from "@/lib/types";
@@ -13,7 +14,8 @@ import { CloudRepo } from "@/lib/repo";
 import { localCounts, migrateLocalToCloud, wasMigrated, type LocalCounts } from "@/lib/migrate";
 
 export default function MeView() {
-  const { repo, user, ready, signOut } = useRepo();
+  const { repo, user, ready, offline, signOut } = useRepo();
+  const toast = useToast();
   const [records, setRecords] = useState<BodyRecord[]>([]);
   const [open, setOpen] = useState(false);
   const [local, setLocal] = useState<LocalCounts | null>(null);
@@ -21,14 +23,18 @@ export default function MeView() {
   const [migrateError, setMigrateError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setRecords(await repo.listBody());
+    try {
+      setRecords(await repo.listBody());
+    } catch (e) {
+      toast(errorText(e, "인바디 기록을 못 불러왔어."));
+    }
     if (repo.mode === "cloud" && !wasMigrated()) {
       const c = localCounts();
       setLocal(c.total > 0 ? c : null);
     } else {
       setLocal(null);
     }
-  }, [repo]);
+  }, [repo, toast]);
   useEffect(() => {
     if (ready) load();
   }, [ready, load]);
@@ -56,7 +62,13 @@ export default function MeView() {
       <AppHeader
         title={String(name)}
         highlight="var(--hl-me)"
-        subtitle={repo.mode === "cloud" ? "클라우드 저장 · 어디서든 같은 기록" : "이 기기에만 저장 · 로그인하면 폰에서도 보여"}
+        subtitle={
+          repo.mode === "cloud"
+            ? offline
+              ? "클라우드 저장 · 지금은 오프라인이라 기록을 못 불러와"
+              : "클라우드 저장 · 어디서든 같은 기록"
+            : "이 기기에만 저장 · 로그인하면 폰에서도 보여"
+        }
         account={!!user}
         actions={
           user ? (
@@ -141,10 +153,13 @@ export default function MeView() {
                     className="shrink-0 text-xs"
                     style={{ color: "var(--muted)" }}
                     onClick={async () => {
-                      if (confirm(`${r.measuredOn} 기록 삭제?`)) {
+                      if (!confirm(`${r.measuredOn} 기록 삭제?`)) return;
+                      try {
                         await repo.deleteBody(r.id);
-                        load();
+                      } catch (e) {
+                        toast(errorText(e, "기록을 지우지 못했어."));
                       }
+                      load();
                     }}
                     aria-label="삭제"
                   >

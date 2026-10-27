@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import { errorText, useToast } from "@/components/Toast";
 import { exercise } from "@/lib/exercises";
 import type { WorkoutRoutine } from "@/lib/types";
 import { Button, Sheet } from "@/components/ui";
@@ -25,12 +26,19 @@ export function RoutineSheet({
   onLoad: (ids: string[]) => void;
 }) {
   const { repo } = useRepo();
+  const toast = useToast();
   const [routines, setRoutines] = useState<WorkoutRoutine[]>([]);
   const [name, setName] = useState("");
   const [edit, setEdit] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => setRoutines(await repo.listRoutines()), [repo]);
+  const load = useCallback(async () => {
+    try {
+      setRoutines(await repo.listRoutines());
+    } catch (e) {
+      toast(errorText(e, "루틴을 못 불러왔어."));
+    }
+  }, [repo, toast]);
   useEffect(() => {
     if (open) {
       setName("");
@@ -50,6 +58,8 @@ export function RoutineSheet({
       await repo.saveRoutine({ id: dup?.id, name: n, exerciseIds: currentIds });
       setName("");
       await load();
+    } catch (e) {
+      toast(errorText(e, "루틴을 저장 못 했어."));
     } finally {
       setSaving(false);
     }
@@ -58,12 +68,16 @@ export function RoutineSheet({
   const pick = async (r: WorkoutRoutine) => {
     onLoad(r.exerciseIds);
     onClose();
-    await repo.touchRoutine(r.id);
+    repo.touchRoutine(r.id).catch(() => {}); // 사용 횟수는 통계용. 실패해도 조용히.
   };
 
   const remove = async (r: WorkoutRoutine) => {
     if (!confirm(`"${r.name}" 루틴 삭제?`)) return;
-    await repo.deleteRoutine(r.id);
+    try {
+      await repo.deleteRoutine(r.id);
+    } catch (e) {
+      toast(errorText(e, "루틴을 지우지 못했어."));
+    }
     await load();
   };
 

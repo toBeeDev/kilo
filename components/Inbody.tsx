@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
+import { apiFetch } from "@/lib/http";
+import type { InbodyParsed } from "@/lib/ai";
 import { downscale } from "@/lib/image";
 import {
   ACTIVITY_LABEL,
@@ -129,9 +131,7 @@ export function InbodySheet({
       const small = await downscale(f, 1600, 0.85);
       const form = new FormData();
       form.append("image", small.blob, "inbody.jpg");
-      const res = await fetch("/api/inbody/parse", { method: "POST", body: form });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "읽기 실패");
+      const json = await apiFetch<InbodyParsed>("/api/inbody/parse", { method: "POST", body: form });
       if (json.weight) setWeight(String(json.weight));
       if (json.bodyFatPct) setFat(String(json.bodyFatPct));
       if (json.skeletalMuscle) setSmm(String(json.skeletalMuscle));

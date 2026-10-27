@@ -1,7 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
+import { logAiUsage, type AiCallMeta } from "./ai-usage";
 import { ANTHROPIC_MODEL, GEMINI_MODEL, aiProvider } from "./config";
 import type { MealItem } from "./types";
+
+/** 모델 호출 상한. Vercel 함수 maxDuration(30s)보다 짧게. */
+const AI_TIMEOUT_MS = 25_000;
 
 /**
  * 서버 전용. 클라이언트에서 import 금지.
@@ -17,16 +21,31 @@ interface AskInput {
   maxTokens: number;
 }
 
-/** 이미지(선택) + 텍스트 한 턴 → 모델 텍스트. JSON만 기대하는 호출이라 Gemini는 JSON 모드로 고정. */
-async function ask(input: AskInput): Promise<string> {
-  const provider = aiProvider();
-  if (provider === "gemini") return askGemini(input);
-  if (provider === "anthropic") return askAnthropic(input);
-  throw new Error("AI 키 없음 (GOOGLE_API_KEY 또는 ANTHROPIC_API_KEY)");
+interface AskResult {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
-async function askGemini({ text, image, maxTokens }: AskInput): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+/** 이미지(선택) + 텍스트 한 턴 → 모델 텍스트. JSON만 기대하는 호출이라 Gemini는 JSON 모드로 고정.
+ *  호출 1건마다 토큰·소요시간을 로그로 남긴다 (lib/ai-usage.ts). */
+async function ask(input: AskInput, meta: AiCallMeta): Promise<string> {
+  const provider = aiProvider();
+  if (!provider) throw new Error("AI 키 없음 (GOOGLE_API_KEY 또는 ANTHROPIC_API_KEY)");
+  const model = provider === "gemini" ? GEMINI_MODEL : ANTHROPIC_MODEL;
+  const started = Date.now();
+  try {
+    const r = provider === "gemini" ? await askGemini(input) : await askAnthropic(input);
+    logAiUsage(meta, { provider, model, inputTokens: r.inputTokens, outputTokens: r.outputTokens, ms: Date.now() - started, ok: true });
+    return r.text;
+  } catch (e) {
+    logAiUsage(meta, { provider, model, inputTokens: 0, outputTokens: 0, ms: Date.now() - started, ok: false });
+    throw e;
+  }
+}
+
+async function askGemini({ text, image, maxTokens }: AskInput): Promise<AskResult> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY, httpOptions: { timeout: AI_TIMEOUT_MS } });
   const parts = [...(image ? [{ inlineData: { mimeType: image.mediaType, data: image.base64 } }] : []), { text }];
   const res = await ai.models.generateContent({
     model: GEMINI_MODEL,
@@ -38,28 +57,46 @@ async function askGemini({ text, image, maxTokens }: AskInput): Promise<string> 
       maxOutputTokens: maxTokens,
     },
   });
-  return (res.text ?? "").trim();
+  const u = res.usageMetadata;
+  return {
+    text: (res.text ?? "").trim(),
+    inputTokens: u?.promptTokenCount ?? 0,
+    outputTokens: (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0),
+  };
 }
 
-async function askAnthropic({ text, image, maxTokens }: AskInput): Promise<string> {
+async function askAnthropic({ text, image, maxTokens }: AskInput): Promise<AskResult> {
   const content: Anthropic.ContentBlockParam[] = [];
   if (image) content.push({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.base64 } });
   content.push({ type: "text", text });
-  const res = await new Anthropic().messages.create({
+  const res = await new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 1 }).messages.create({
     model: ANTHROPIC_MODEL,
     max_tokens: maxTokens,
     messages: [{ role: "user", content }],
   });
-  return res.content
-    .map((b) => (b.type === "text" ? b.text : ""))
-    .join("")
-    .trim();
+  return {
+    text: res.content
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("")
+      .trim(),
+    inputTokens: res.usage.input_tokens,
+    outputTokens: res.usage.output_tokens,
+  };
 }
 
 function extractJson<T>(text: string): T {
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("JSON 없음: " + text.slice(0, 200));
-  return JSON.parse(m[0]) as T;
+  const cleaned = text.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error("모델 응답에 JSON이 없어. 다시 시도해.");
+    try {
+      return JSON.parse(m[0]) as T;
+    } catch {
+      throw new Error("모델 응답이 잘렸거나 형식이 깨졌어. 다시 시도해.");
+    }
+  }
 }
 
 /* ---------------- 인바디 결과지 ---------------- */
@@ -89,8 +126,9 @@ const INBODY_PROMPT = `인바디(InBody) 결과지 사진이다. 아래 값을 �
 export async function parseInbodyImage(
   base64: string,
   mediaType: ImageMediaType,
+  meta: AiCallMeta,
 ): Promise<InbodyParsed> {
-  const out = await ask({ text: INBODY_PROMPT, image: { base64, mediaType }, maxTokens: 400 });
+  const out = await ask({ text: INBODY_PROMPT, image: { base64, mediaType }, maxTokens: 400 }, meta);
   const parsed = extractJson<Partial<InbodyParsed>>(out);
   return { ...parsed, confidence: parsed.confidence ?? "medium" };
 }
@@ -113,17 +151,23 @@ const MEAL_PROMPT = `한국인의 한 끼 식사다. 사진(있으면)과 설명
 
 형식: {"items":[{"name":"햇반","grams":210,"kcal":310,"protein":6,"fat":1,"carbs":69,"sodium":5}],"note":"..."}`;
 
-export async function parseMeal(input: {
-  base64?: string;
-  mediaType?: ImageMediaType;
-  text?: string;
-}): Promise<MealParsed> {
+export async function parseMeal(
+  input: {
+    base64?: string;
+    mediaType?: ImageMediaType;
+    text?: string;
+  },
+  meta: AiCallMeta,
+): Promise<MealParsed> {
   const image = input.base64 && input.mediaType ? { base64: input.base64, mediaType: input.mediaType } : undefined;
-  const out = await ask({
-    text: MEAL_PROMPT + (input.text ? `\n\n설명: ${input.text}` : ""),
-    image,
-    maxTokens: 800,
-  });
+  const out = await ask(
+    {
+      text: MEAL_PROMPT + (input.text ? `\n\n설명: ${input.text}` : ""),
+      image,
+      maxTokens: 1200,
+    },
+    meta,
+  );
   const parsed = extractJson<MealParsed>(out);
   const items = (parsed.items ?? []).map((i) => ({
     name: String(i.name ?? "").trim(),
@@ -168,8 +212,43 @@ const SUMMARY_PROMPT = `너는 린매스업/벌크업/다이어트를 코칭하�
 
 형식: {"summary":"...","nextStep":"..."}`;
 
-export async function dailySummary(input: SummaryInput): Promise<SummaryOutput> {
-  const out = await ask({ text: SUMMARY_PROMPT + "\n\n기록:\n" + JSON.stringify(input, null, 1), maxTokens: 500 });
+/** 클라이언트가 보낸 총평 입력을 크기·형식 면에서 믿을 수 있는 범위로 깎는다. 프롬프트에 그대로 들어가므로 필수. */
+export function sanitizeSummaryInput(raw: unknown): SummaryInput | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+  const num = (v: unknown) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : 0);
+  const day = str(r.day, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const a = r.actual;
+  if (!a || typeof a !== "object") return null;
+  const ac = a as Record<string, unknown>;
+  const macros = (m: unknown) => {
+    if (!m || typeof m !== "object") return null;
+    const x = m as Record<string, unknown>;
+    return { kcal: num(x.kcal), protein: num(x.protein), fat: num(x.fat), carbs: num(x.carbs) };
+  };
+  const lines = (v: unknown, n: number, len: number) => (Array.isArray(v) ? v.slice(0, n).map((l) => str(l, len)) : []);
+  const w = r.workout && typeof r.workout === "object" ? (r.workout as Record<string, unknown>) : null;
+  const b = r.body && typeof r.body === "object" ? (r.body as Record<string, unknown>) : null;
+  return {
+    day,
+    goalLabel: str(r.goalLabel, 20),
+    target: macros(r.target),
+    actual: {
+      ...(macros(ac) ?? { kcal: 0, protein: 0, fat: 0, carbs: 0 }),
+      sodium: num(ac.sodium),
+      waterMl: num(ac.waterMl),
+      waterTarget: num(ac.waterTarget),
+    },
+    meals: lines(r.meals, 20, 200),
+    workout: w ? { volume: num(w.volume), sets: num(w.sets), lines: lines(w.lines, 30, 120), muscles: lines(w.muscles, 8, 20) } : null,
+    body: b ? { weight: Number(b.weight) || 0, bodyFatPct: Number(b.bodyFatPct) || 0, skeletalMuscle: b.skeletalMuscle == null ? undefined : Number(b.skeletalMuscle) || 0 } : null,
+  };
+}
+
+export async function dailySummary(input: SummaryInput, meta: AiCallMeta): Promise<SummaryOutput> {
+  const out = await ask({ text: SUMMARY_PROMPT + "\n\n기록:\n" + JSON.stringify(input, null, 1), maxTokens: 500 }, meta);
   const parsed = extractJson<Partial<SummaryOutput>>(out);
   return {
     summary: String(parsed.summary ?? "").trim(),
