@@ -1,4 +1,5 @@
 import data from "./exercises.json";
+import { KO_NAMES, autoKo } from "./exercise-ko";
 
 /**
  * 종목 데이터. 출처: free-exercise-db (퍼블릭 도메인, 실제 기구 사진 시작/끝 2프레임).
@@ -25,7 +26,12 @@ export interface Exercise {
   muscle: Muscle;
   secondary: Muscle[];
   steps?: string[];
+  /** 손으로 붙인 한글명(큐레이션 + KO_NAMES). 피커 기본 목록에 먼저 나온다. */
   curated: boolean;
+  /** 스트레칭·폼롤링·워밍업류. 목록 맨 뒤로. */
+  stretch: boolean;
+  /** 0 큐레이션(대표 종목) · 1 한글명 붙인 흔한 종목 · 2 자동 번역 */
+  tier: 0 | 1 | 2;
 }
 
 interface Curated {
@@ -55,21 +61,45 @@ const curatedIds = new Set(curated.map((c) => c.id));
 
 export const GROUPS = ["가슴", "등", "하체", "어깨", "팔", "코어"] as const;
 
+const isStretch = (en: string) => /stretch|-SMR|circles|rotation|tilt|pose|hug|vacuum|wipers|squeeze|balance|drill|quick step|carioca/i.test(en);
+
 export const EXERCISES: Exercise[] = [
-  ...curated.map((c) => ({ ...c, secondary: c.secondary ?? [], curated: true })),
+  ...curated.map((c) => ({ ...c, secondary: c.secondary ?? [], curated: true, stretch: false, tier: 0 as const })),
   ...all
     .filter((e) => !curatedIds.has(e.id))
-    .map((e) => ({
-      id: e.id, ko: e.en, en: e.en, group: e.group, equipment: e.equipment,
-      muscle: e.m, secondary: e.s ?? [], curated: false,
-    })),
+    .map((e) => {
+      const named = KO_NAMES[e.id];
+      return {
+        id: e.id,
+        ko: named ?? autoKo(e.en),
+        tier: (named ? 1 : 2) as 1 | 2,
+        en: e.en,
+        group: e.group,
+        equipment: e.equipment,
+        muscle: e.m,
+        secondary: e.s ?? [],
+        curated: !!named,
+        stretch: isStretch(e.en),
+      };
+    }),
 ];
+
+/** 피커 기본 목록 순서: 대표 종목(큐레이션 순서 유지) → 한글명 붙인 종목(사전 순서 유지) → 자동 번역(이름 짧은 순) → 스트레칭류. */
+const browseRank = (e: Exercise) => (e.stretch ? 3 : e.tier);
+const BROWSE_ORDER: Exercise[] = [...EXERCISES].sort(
+  (a, b) => browseRank(a) - browseRank(b) || (browseRank(a) >= 2 ? a.ko.length - b.ko.length : 0),
+);
+
+/** 검색어 없이 둘러보기. 그룹 필터만. */
+export function browse(group?: string): Exercise[] {
+  return group ? BROWSE_ORDER.filter((e) => e.group === group) : BROWSE_ORDER;
+}
 
 const byId = new Map(EXERCISES.map((e) => [e.id, e]));
 
 export function exercise(id: string): Exercise {
   return (
-    byId.get(id) ?? { id, ko: id.replace(/_/g, " "), en: id, group: "기타", equipment: "기타", muscle: "neck", secondary: [], curated: false }
+    byId.get(id) ?? { id, ko: id.replace(/_/g, " "), en: id, group: "기타", equipment: "기타", muscle: "neck", secondary: [], curated: false, stretch: false, tier: 2 }
   );
 }
 
@@ -140,23 +170,32 @@ export function koToEnTokens(q: string): string[] {
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s\-_]+/g, "");
 
-/** 한글/영문 둘 다 검색. 큐레이션 먼저, 그다음 전체(876개). 결과 30개. */
+/** 한글/영문 둘 다 검색. 큐레이션 먼저, 그다음 전체(876개). 결과 40개. 검색어 없으면 browse(). */
 export function search(q: string, group?: string): Exercise[] {
   const raw = norm(q);
-  if (!raw) return EXERCISES.filter((e) => (!group || e.group === group) && e.curated);
-  const tokens = koToEnTokens(q).map(norm).filter(Boolean);
-  const ko = raw.replace(/[^가-힣]/g, "");
+  if (!raw) return browse(group);
+  // "어깨 프레스" 처럼 부위 이름이 섞이면 그 단어는 그룹/근육 필터로 쓴다
+  const words = q.trim().toLowerCase().split(/\s+/);
+  const groupWords = words.filter((w) => (GROUPS as readonly string[]).includes(w));
+  const muscleWords = words.filter((w) => MUSCLE_EN[w]).map((w) => MUSCLE_EN[w]);
+  const rest = words.filter((w) => !(GROUPS as readonly string[]).includes(w) && !MUSCLE_EN[w]).join(" ");
+  const tokens = koToEnTokens(rest).map(norm).filter(Boolean);
+  const ko = norm(rest).replace(/[^가-힣]/g, "");
+  const nrest = norm(rest);
   const hits = EXERCISES.filter((e) => {
-    if (group && e.group !== group) return false;
+    // 검색어에 부위가 들어 있으면 그게 칩보다 우선 ("하체" 칩 상태에서 "어깨 프레스" 를 치면 어깨로)
+    if (groupWords.length ? !groupWords.includes(e.group) : group && e.group !== group) return false;
+    if (muscleWords.length && !muscleWords.some((m) => e.muscle === m || e.secondary.includes(m as Muscle))) return false;
+    if (!nrest) return true; // 부위만 친 경우
     const nko = norm(e.ko);
     const nen = norm(e.en);
-    if (nko.includes(raw) || nen.includes(raw)) return true; // 그대로 들어 있으면 끝
+    if (nko.includes(nrest) || nen.includes(nrest)) return true; // 그대로 들어 있으면 끝
     if (ko && nko.includes(ko) && nko !== nen) return true; // 한글명에 한글 조각이 있으면
     // 영문 키워드: 전부 들어 있어야 한다 ("leg" + "press")
-    return tokens.length > 0 && tokens.every((t) => nen.includes(t) || nko.includes(t) || MUSCLE_KO[e.muscle] === t);
+    return tokens.length > 0 && tokens.every((t) => nen.includes(t) || nko.includes(t));
   });
-  // 큐레이션 → 영문명 짧은 순(정확한 이름이 위로)
-  return hits.sort((a, b) => Number(b.curated) - Number(a.curated) || a.en.length - b.en.length).slice(0, 30);
+  // 큐레이션 → 스트레칭 뒤로 → 이름 짧은 순(정확한 이름이 위로)
+  return hits.sort((a, b) => browseRank(a) - browseRank(b) || a.en.length - b.en.length).slice(0, 40);
 }
 
 /** Epley 1RM */

@@ -50,6 +50,8 @@ export function ExerciseDemo({
 /* 종목 선택                                                           */
 /* ------------------------------------------------------------------ */
 
+const PAGE = 30;
+
 export function ExercisePicker({
   open,
   onClose,
@@ -61,7 +63,9 @@ export function ExercisePicker({
 }) {
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<string | undefined>();
-  const results = useMemo(() => search(q, group), [q, group]);
+  const [limit, setLimit] = useState(PAGE);
+  const all = useMemo(() => search(q, group), [q, group]);
+  const results = all.slice(0, limit);
 
   useEffect(() => {
     if (open) {
@@ -69,6 +73,7 @@ export function ExercisePicker({
       setGroup(undefined);
     }
   }, [open]);
+  useEffect(() => setLimit(PAGE), [q, group]);
 
   return (
     <Sheet open={open} onClose={onClose} title="종목 추가" tall>
@@ -90,7 +95,10 @@ export function ExercisePicker({
           </GroupChip>
         ))}
       </div>
-      <ul className="mt-3 grid grid-cols-2 gap-3">
+      <p className="mt-3 text-[12px]" style={{ color: "var(--muted)" }}>
+        {q.trim() ? `${all.length}개 찾음` : `${all.length}개 · 자주 쓰는 종목부터`}
+      </p>
+      <ul className="mt-2 grid grid-cols-2 gap-3">
         {results.map((e) => (
           <li key={e.id}>
             <button type="button" className="card w-full overflow-hidden text-left active:scale-[0.98]" onClick={() => onPick(e)}>
@@ -105,6 +113,11 @@ export function ExercisePicker({
           </li>
         ))}
       </ul>
+      {all.length > limit && (
+        <Button variant="secondary" className="mt-3 w-full" onClick={() => setLimit((n) => n + PAGE)}>
+          더 보기 ({all.length - limit}개 남음)
+        </Button>
+      )}
       {!results.length && (
         <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
           못 찾았어. 다른 이름(레그 프레스 / leg press)으로 쳐봐.
