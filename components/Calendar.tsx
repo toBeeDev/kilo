@@ -47,6 +47,7 @@ export default function Calendar({
   onSelect,
   totals,
   target,
+  defaultExpanded = false,
 }: {
   month: string; // YYYY-MM
   onMonthChange: (ym: string) => void;
@@ -54,8 +55,10 @@ export default function Calendar({
   onSelect: (day: string) => void;
   totals: Map<string, DayTotal>;
   target: number | null;
+  /** 시트 안에서 쓸 때 월 전체를 바로 펼침 */
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const today = todayStr();
   const { first, lastDate, y, m } = monthRange(month);
   const firstDow = new Date(y, m - 1, 1).getDay(); // 0=일

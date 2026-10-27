@@ -262,60 +262,6 @@ export function Sheet({
   );
 }
 
-/* ---------- 날짜 네비 ---------- */
-
-export function DayNav({
-  day,
-  onChange,
-  isToday,
-}: {
-  day: string;
-  onChange: (d: string) => void;
-  isToday: boolean;
-}) {
-  const d = new Date(day + "T00:00:00");
-  const label = `${d.getMonth() + 1}월 ${d.getDate()}일 ${"일월화수목금토"[d.getDay()]}`;
-  const nav = "h-9 w-9 rounded-full flex items-center justify-center text-lg";
-  return (
-    <div className="flex items-center justify-between">
-      <button
-        type="button"
-        className={nav}
-        style={{ background: "var(--card)" }}
-        onClick={() => onChange(shift(day, -1))}
-        aria-label="전날"
-      >
-        ‹
-      </button>
-      <div className="text-center">
-        <div className="text-[15px] font-semibold">{isToday ? "오늘" : label}</div>
-        {isToday && (
-          <div className="text-xs" style={{ color: "var(--muted)" }}>
-            {label}
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        className={nav}
-        style={{ background: "var(--card)", opacity: isToday ? 0.3 : 1 }}
-        onClick={() => !isToday && onChange(shift(day, 1))}
-        aria-label="다음날"
-        disabled={isToday}
-      >
-        ›
-      </button>
-    </div>
-  );
-}
-
-function shift(day: string, delta: number) {
-  const d = new Date(day + "T00:00:00");
-  d.setDate(d.getDate() + delta);
-  const off = d.getTimezoneOffset();
-  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
-}
-
 /* ---------- 빈 상태 ---------- */
 
 export function Empty({

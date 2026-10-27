@@ -8,7 +8,8 @@ import { BodyMap, muscleScores } from "@/components/Body";
 import WorkoutCharts from "@/components/WorkoutCharts";
 import { ExerciseDemo, ExercisePicker, SetLogger } from "@/components/Workout";
 import { FloatingRestTimer, RestTimerProvider } from "@/components/RestTimer";
-import { PageHeader, weekdayLabel } from "@/components/PageHeader";
+import { PageHeader } from "@/components/PageHeader";
+import { DayNav } from "@/components/DayNav";
 import { Button, Card, Empty, Segmented } from "@/components/ui";
 
 type View = "today" | "analysis";
@@ -95,13 +96,11 @@ function WorkoutInner() {
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
     .slice(0, 4)
     .map(([m]) => MUSCLE_KO[m as keyof typeof MUSCLE_KO] ?? m);
-  const d = new Date(day + "T00:00:00");
 
   return (
     <>
       <PageHeader
-        title={isToday ? "운동" : `${d.getMonth() + 1}월 ${d.getDate()}일 운동`}
-        subtitle={isToday ? weekdayLabel(day) : undefined}
+        title="운동"
         right={
           <div className="w-36">
             <Segmented<View>
@@ -115,11 +114,7 @@ function WorkoutInner() {
           </div>
         }
       />
-      {!isToday && (
-        <button type="button" className="mt-1 text-[12px] underline" style={{ color: "var(--muted)" }} onClick={() => { setDay(today); setOrder([]); }}>
-          오늘로 돌아가기
-        </button>
-      )}
+      <DayNav day={day} onChange={setDay} />
 
       {view === "analysis" ? (
         <div className="mt-4">

@@ -6,21 +6,24 @@ import { SLOTS, SLOT_LABEL, todayStr, type FavoriteMeal, type MealLog } from "@/
 import { FavoriteCard, MealPhoto, MealSheet } from "@/components/Meal";
 import { MacroRatioBar } from "@/components/Nutrition";
 import { Button, Card, Empty } from "@/components/ui";
-import { CameraIcon, IconButton, PageHeader, weekdayLabel } from "@/components/PageHeader";
+import { CameraIcon, IconButton, PageHeader } from "@/components/PageHeader";
+import { DayNav } from "@/components/DayNav";
 
 export default function MealsPage() {
   const { repo, ready } = useRepo();
   const today = todayStr();
+  const [day, setDay] = useState(today);
+  const isToday = day === today;
   const [meals, setMeals] = useState<MealLog[]>([]);
   const [favs, setFavs] = useState<FavoriteMeal[]>([]);
   const [editFavs, setEditFavs] = useState(false);
   const [sheet, setSheet] = useState<{ existing?: MealLog; preset?: FavoriteMeal } | null>(null);
 
   const load = useCallback(async () => {
-    const [m, f] = await Promise.all([repo.listMeals(today), repo.listFavorites()]);
+    const [m, f] = await Promise.all([repo.listMeals(day), repo.listFavorites()]);
     setMeals(m);
     setFavs(f);
-  }, [repo, today]);
+  }, [repo, day]);
   useEffect(() => {
     if (ready) load();
   }, [ready, load]);
@@ -34,13 +37,13 @@ export default function MealsPage() {
     <>
       <PageHeader
         title="식단"
-        subtitle={weekdayLabel(today)}
         right={
           <IconButton onClick={() => setSheet({})} label="사진으로 기록">
             <CameraIcon />
           </IconButton>
         }
       />
+      <DayNav day={day} onChange={setDay} />
 
       {/* 즐겨찾기 */}
       <section className="mt-5">
@@ -83,7 +86,7 @@ export default function MealsPage() {
       {meals.length > 0 && (
         <Card className="mt-5">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm font-semibold">오늘 합계</span>
+            <span className="text-sm font-semibold">{isToday ? "오늘 합계" : "합계"}</span>
             <span className="num text-2xl font-bold">
               {Math.round(total.kcal)}
               <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>
@@ -130,14 +133,14 @@ export default function MealsPage() {
           );
         })}
         {!meals.length && (
-          <Empty title="오늘 아직 기록 없음" body="위 카메라로 찍거나, 자주 먹는 식단 탭하거나." action={<Button onClick={() => setSheet({})}>첫 끼 기록하기</Button>} />
+          <Empty title={isToday ? "오늘 아직 기록 없음" : "이 날 기록 없음"} body="위 카메라로 찍거나, 자주 먹는 식단 탭하거나." action={<Button onClick={() => setSheet({})}>첫 끼 기록하기</Button>} />
         )}
       </section>
 
       <MealSheet
         open={sheet !== null}
         onClose={() => setSheet(null)}
-        day={today}
+        day={day}
         existing={sheet?.existing}
         preset={sheet?.preset}
         onSaved={load}
