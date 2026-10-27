@@ -10,7 +10,7 @@ import { InbodySheet, TargetSummary } from "@/components/Inbody";
 import BodyTrend from "@/components/BodyTrend";
 import { Button, Card, Empty } from "@/components/ui";
 import { AppHeader } from "@/components/PageHeader";
-import { CloudRepo } from "@/lib/repo";
+import { CloudRepo, LOCAL_SOFT_LIMIT, localUsageBytes } from "@/lib/repo";
 import { localCounts, migrateLocalToCloud, wasMigrated, type LocalCounts } from "@/lib/migrate";
 
 export default function MeView() {
@@ -56,6 +56,9 @@ export default function MeView() {
 
   const latest = records[0] ?? null;
   const name = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "게스트";
+  const usage = repo.mode === "local" && ready ? localUsageBytes() : 0;
+  const usageMb = (usage / 1024 / 1024).toFixed(1);
+  const usageHigh = usage > LOCAL_SOFT_LIMIT * 0.8;
 
   return (
     <>
@@ -98,10 +101,16 @@ export default function MeView() {
           )}
           {migrateError && (
             <p className="mt-2 text-[12px]" style={{ color: "var(--danger)" }}>
-              {migrateError} — 일부는 올라갔을 수 있어. 다시 누르면 중복될 수 있으니 기록 확인 먼저.
+              {migrateError} — 다시 누르면 이어서 올라가. 같은 기록은 덮어쓰니 중복 걱정은 없어.
             </p>
           )}
         </Card>
+      )}
+
+      {repo.mode === "local" && usage > 0 && (
+        <p className="mt-3 text-[12px]" style={{ color: usageHigh ? "var(--danger)" : "var(--muted)" }}>
+          이 기기 저장 사용량 {usageMb}MB / 약 5MB{usageHigh ? " · 거의 찼어. 사진 기록을 지우거나 로그인해서 클라우드로 옮겨." : ""}
+        </p>
       )}
 
       <div className="mt-5">

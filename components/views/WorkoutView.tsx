@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
 import { errorText, useToast } from "@/components/Toast";
+import { useDay, useLatest } from "@/lib/useToday";
 import { MUSCLE_KO, exercise, type Exercise } from "@/lib/exercises";
-import { WORKOUT_DAY_KEY, shiftDay, todayStr, type WorkoutSet } from "@/lib/types";
+import { WORKOUT_DAY_KEY, shiftDay, type WorkoutSet } from "@/lib/types";
 import { BodyMap, muscleScores } from "@/components/Body";
 import WorkoutCharts from "@/components/WorkoutCharts";
 import { ExerciseDemo, ExercisePicker, SetLogger } from "@/components/Workout";
-import { FloatingRestTimer, RestTimerProvider } from "@/components/RestTimer";
 import { RoutineSheet } from "@/components/Routine";
 import { DayHeader } from "@/components/DayNav";
 import { Button, Card, Empty, Segmented } from "@/components/ui";
@@ -16,20 +16,12 @@ import { Button, Card, Empty, Segmented } from "@/components/ui";
 type View = "today" | "analysis";
 
 export default function WorkoutView() {
-  return (
-    <RestTimerProvider>
-      <WorkoutInner />
-    </RestTimerProvider>
-  );
-}
-
-function WorkoutInner() {
   const { repo, ready } = useRepo();
   const toast = useToast();
-  const today = todayStr();
-  const [day, setDay] = useState(today);
+  const [day, setDay, today] = useDay();
   const isToday = day === today;
   const [view, setView] = useState<View>("today");
+  const req = useLatest();
 
   // 홈 달력에서 "운동 추가"로 넘어온 과거 날짜
   useEffect(() => {
@@ -52,8 +44,10 @@ function WorkoutInner() {
   const [history, setHistory] = useState<WorkoutSet[]>([]); // 최근 8주
 
   const load = useCallback(async () => {
+    const t = req.token();
     try {
       const [s, h] = await Promise.all([repo.listSets(day), repo.setsInRange(shiftDay(day, -62), day)]);
+      if (!req.fresh(t)) return;
       setSets(s);
       setOrder((o) => {
         const fromSets = [...new Set(s.map((x) => x.exerciseId))];
@@ -61,8 +55,9 @@ function WorkoutInner() {
       });
       setHistory(h);
     } catch (e) {
-      toast(errorText(e, "운동 기록을 못 불러왔어."));
+      if (req.fresh(t)) toast(errorText(e, "운동 기록을 못 불러왔어."));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, day, toast]);
 
   // 날짜 바뀌면 종목 순서 초기화 (오늘 종목이 과거 날짜에 남지 않게)
@@ -100,6 +95,8 @@ function WorkoutInner() {
   };
 
   const removeExercise = async (id: string) => {
+    const n = setsOf(id).length;
+    if (n > 0 && !confirm(`${exercise(id).ko} 세트 ${n}개를 지울까?`)) return;
     try {
       await Promise.all(setsOf(id).map((s) => repo.deleteSet(s.id)));
       setSets((cur) => cur.filter((s) => s.exerciseId !== id));
@@ -235,7 +232,6 @@ function WorkoutInner() {
         </>
       )}
 
-      {active === null && <FloatingRestTimer />}
       <ExercisePicker open={picker} onClose={() => setPicker(false)} onPick={pick} />
       <RoutineSheet open={routineOpen} onClose={() => setRoutineOpen(false)} currentIds={order} onLoad={loadRoutine} />
       <SetLogger

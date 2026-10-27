@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { GUEST_COOKIE, SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/config";
 
-const PUBLIC_PREFIXES = ["/login", "/auth", "/api", "/manifest.webmanifest", "/icon.svg", "/sw.js"];
+const PUBLIC_PREFIXES = ["/login", "/auth", "/api", "/manifest.webmanifest", "/icon.svg", "/icons/", "/apple-icon", "/sw.js"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

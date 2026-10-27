@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/config";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -9,7 +9,15 @@ type Provider = "google" | "kakao";
 export default function LoginView() {
   const [busy, setBusy] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [standaloneIos, setStandaloneIos] = useState(false);
   const configured = isSupabaseConfigured();
+
+  // iOS 홈 화면 앱에서 OAuth를 시작하면 Safari로 빠져나가고 세션이 Safari에만 남는다 → 미리 안내
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    setStandaloneIos(standalone && ios);
+  }, []);
 
   async function signIn(provider: Provider) {
     setBusy(provider);
@@ -47,6 +55,11 @@ export default function LoginView() {
       </div>
 
       <div className="space-y-2.5">
+        {configured && standaloneIos && (
+          <p className="rounded-[var(--r-md)] px-4 py-3 text-[13px]" style={{ background: "var(--warn-soft)", color: "var(--ink)" }}>
+            홈 화면 앱에서는 로그인이 Safari로 열려. 로그인이 안 붙으면 Safari에서 먼저 로그인한 뒤 홈 화면 아이콘으로 다시 열어.
+          </p>
+        )}
         {configured ? (
           <>
             <OAuthButton onClick={() => signIn("kakao")} busy={busy === "kakao"} style={{ background: "#FEE500", color: "#191919" }}>

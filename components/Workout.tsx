@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
 import { GROUPS, exercise, media, oneRm, search, type Exercise } from "@/lib/exercises";
 import { uid, type WorkoutSet } from "@/lib/types";
@@ -15,10 +15,13 @@ export function ExerciseDemo({
   id,
   className = "",
   rounded = "var(--r-md)",
+  still = false,
 }: {
   id: string;
   className?: string;
   rounded?: string;
+  /** 첫 프레임만 (목록용 — 이미지 요청 절반) */
+  still?: boolean;
 }) {
   const [a, b] = media(id);
   const [broken, setBroken] = useState(false);
@@ -34,9 +37,11 @@ export function ExerciseDemo({
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ background: "var(--ink)", borderRadius: rounded }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={a} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" onError={() => setBroken(true)} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={b} alt="" className="demo-frame-b absolute inset-0 h-full w-full object-cover" loading="lazy" />
+      <img src={a} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+      {!still && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={b} alt="" className="demo-frame-b absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+      )}
     </div>
   );
 }
@@ -89,7 +94,7 @@ export function ExercisePicker({
         {results.map((e) => (
           <li key={e.id}>
             <button type="button" className="card w-full overflow-hidden text-left active:scale-[0.98]" onClick={() => onPick(e)}>
-              <ExerciseDemo id={e.id} className="aspect-[4/3]" rounded="0" />
+              <ExerciseDemo id={e.id} className="aspect-[4/3]" rounded="0" still />
               <div className="p-3">
                 <div className="truncate text-[14px] font-semibold">{e.ko}</div>
                 <div className="text-[12px]" style={{ color: "var(--muted)" }}>
@@ -102,7 +107,7 @@ export function ExercisePicker({
       </ul>
       {!results.length && (
         <p className="py-10 text-center text-sm" style={{ color: "var(--muted)" }}>
-          못 찾았어. 영문으로도 검색해봐.
+          못 찾았어. 다른 이름(레그 프레스 / leg press)으로 쳐봐.
         </p>
       )}
     </Sheet>
@@ -154,27 +159,33 @@ export function SetLogger({
   const [last, setLast] = useState<WorkoutSet[]>([]);
   const [unilateral, setUnilateral] = useState(false);
 
-  // 열릴 때: 오늘 세트 있으면 마지막 세트, 없으면 이전 세션 첫 세트로 프리필
+  // 열릴 때 한 번만: 오늘 세트 있으면 마지막 세트, 없으면 이전 세션 첫 세트로 프리필.
+  // sets를 의존성에 넣으면 세트를 기록할 때마다 다시 돌아 좌우 교대·입력 중인 무게가 초기화된다 → ref로 읽는다.
+  const setsRef = useRef(sets);
+  setsRef.current = sets;
   useEffect(() => {
     if (!open || !exerciseId) return;
     let alive = true;
     (async () => {
       const prev = await repo.lastSets(exerciseId, day).catch(() => [] as WorkoutSet[]);
       if (!alive) return;
+      const cur = setsRef.current;
       setLast(prev);
-      const seed = sets.at(-1) ?? prev[0];
+      const seed = cur.at(-1) ?? prev[0];
       if (seed) {
         setWeight(seed.weight);
         setReps(seed.reps);
       }
-      const uni = sets.some((s) => s.side) || prev.some((s) => s.side);
+      const uni = cur.some((s) => s.side) || prev.some((s) => s.side);
       setUnilateral(uni);
-      setSide(uni ? "right" : "both");
+      // 한쪽씩 기록 중이면 마지막 세트의 반대쪽부터
+      const lastSide = cur.at(-1)?.side;
+      setSide(uni ? (lastSide === "right" ? "left" : "right") : "both");
     })();
     return () => {
       alive = false;
     };
-  }, [open, exerciseId, day, repo, sets]);
+  }, [open, exerciseId, day, repo]);
 
   if (!ex || !exerciseId) return null;
 
@@ -189,6 +200,7 @@ export function SetLogger({
       side: side === "both" ? undefined : side,
     };
     onChange([...sets, s]);
+    if (side !== "both") setSide(side === "right" ? "left" : "right"); // 한쪽씩: 자동 교대
     timer.start();
   };
 

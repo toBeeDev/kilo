@@ -100,9 +100,39 @@ function read<T>(key: string): T[] {
     return [];
   }
 }
-function write<T>(key: string, rows: T[]) {
-  localStorage.setItem(key, JSON.stringify(rows));
+/** localStorage 쓰기. 용량 초과면 원인을 사람 말로 바꿔 던진다 (토스트가 그대로 보여준다). */
+export class StorageFullError extends Error {
+  constructor() {
+    super("이 기기 저장 공간이 꽉 찼어. 사진 기록을 지우거나 로그인해서 클라우드로 옮겨.");
+    this.name = "StorageFullError";
+  }
 }
+function isQuota(e: unknown) {
+  return e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014);
+}
+function setItem(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    if (isQuota(e)) throw new StorageFullError();
+    throw e;
+  }
+}
+function write<T>(key: string, rows: T[]) {
+  setItem(key, JSON.stringify(rows));
+}
+
+/** 이 기기에 kilo가 쓰고 있는 용량(대략, 바이트). 브라우저 한도는 보통 5MB 안팎. */
+export function localUsageBytes() {
+  let n = 0;
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("kilo:")) n += (k.length + (localStorage.getItem(k)?.length ?? 0)) * 2;
+  } catch {
+    /* ignore */
+  }
+  return n;
+}
+export const LOCAL_SOFT_LIMIT = 4.5 * 1024 * 1024;
 
 export class LocalRepo implements Repo {
   readonly mode = "local" as const;
@@ -140,10 +170,12 @@ export class LocalRepo implements Repo {
     else rows.push(row);
     try {
       write(K.meals, rows);
-    } catch {
-      // 용량 초과 시 사진 없이 저장
+    } catch (e) {
+      if (!(e instanceof StorageFullError)) throw e;
+      // 용량 초과 → 사진만 빼고 다시 (기록은 살린다). 그래도 안 되면 그대로 던진다.
       row.photo = undefined;
       if (i >= 0) rows[i] = row;
+      else rows[rows.length - 1] = row;
       write(K.meals, rows);
     }
     return row;
@@ -163,8 +195,11 @@ export class LocalRepo implements Repo {
     else rows.push(row);
     try {
       write(K.favs, rows);
-    } catch {
+    } catch (e) {
+      if (!(e instanceof StorageFullError)) throw e;
       row.photo = undefined;
+      if (i >= 0) rows[i] = row;
+      else rows[rows.length - 1] = row;
       write(K.favs, rows);
     }
     return row;
@@ -281,7 +316,7 @@ export class LocalRepo implements Repo {
   async setWater(day: string, ml: number) {
     const m = readMap<number>(K.water);
     m[day] = Math.max(0, ml);
-    localStorage.setItem(K.water, JSON.stringify(m));
+    setItem(K.water, JSON.stringify(m));
   }
   async getSummary(day: string) {
     return readMap<DaySummary>(K.summary)[day] ?? null;
@@ -289,7 +324,7 @@ export class LocalRepo implements Repo {
   async saveSummary(s: DaySummary) {
     const m = readMap<DaySummary>(K.summary);
     m[s.day] = s;
-    localStorage.setItem(K.summary, JSON.stringify(m));
+    setItem(K.summary, JSON.stringify(m));
   }
 
   async uploadPhoto(dataUrl: string): Promise<PhotoRef> {

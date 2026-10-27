@@ -4,11 +4,14 @@
  *
  * 전략
  * - 페이지 이동(navigate): 네트워크 우선, 실패하면 같은 경로 캐시 → 없으면 "/" 캐시
- * - /_next/static/*: 캐시 우선 (해시 파일명이라 영원히 유효)
+ *   (리다이렉트된 응답(=로그인 페이지)은 셸로 저장하지 않는다)
+ * - /_next/static/*, 아이콘, 매니페스트: 캐시 우선 (해시 파일명이라 영원히 유효)
  * - 종목 이미지(free-exercise-db): 캐시 우선, 300개 넘으면 오래된 것부터 삭제
  * - /api/*, Supabase 등 나머지 교차 출처: 캐시 안 함
+ *
+ * 버전: 등록 URL의 ?v=<빌드 id> 를 캐시 이름에 넣는다. 새 배포 = 새 SW = activate 때 이전 캐시 전부 삭제.
  */
-const VERSION = "kilo-v1";
+const VERSION = "kilo-" + (new URL(self.location.href).searchParams.get("v") || "dev");
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const MEDIA = `${VERSION}-media`;
@@ -16,11 +19,26 @@ const PAGES = ["/", "/meals", "/workout", "/me", "/manifest.webmanifest", "/icon
 const MEDIA_HOST = "raw.githubusercontent.com";
 const MEDIA_MAX = 300;
 
+const isStaticPath = (p) =>
+  p.startsWith("/_next/static/") || p === "/icon.svg" || p === "/manifest.webmanifest" || p.startsWith("/icons/") || p.startsWith("/apple-icon");
+
+/** 셸로 저장해도 되는 응답인지: 같은 출처, 200, 리다이렉트 아님 */
+const cacheable = (res, url) => res && res.ok && !res.redirected && res.type === "basic" && url.origin === self.location.origin;
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
-      .then((c) => Promise.allSettled(PAGES.map((p) => c.add(new Request(p, { cache: "reload" })))))
+      .then((c) =>
+        Promise.allSettled(
+          PAGES.map(async (p) => {
+            const res = await fetch(new Request(p, { cache: "reload", redirect: "follow" }));
+            if (cacheable(res, new URL(res.url || p, self.location.origin)) && new URL(res.url || p, self.location.origin).pathname === p) {
+              await c.put(p, res);
+            }
+          }),
+        ),
+      )
       .then(() => self.skipWaiting()),
   );
 });
@@ -44,7 +62,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok && url.origin === self.location.origin) {
+          if (cacheable(res, url) && new URL(res.url || req.url).pathname === url.pathname) {
             const copy = res.clone();
             caches.open(SHELL).then((c) => c.put(url.pathname, copy));
           }
@@ -58,9 +76,7 @@ self.addEventListener("fetch", (event) => {
   // 2. 같은 출처 정적 파일: 캐시 우선
   if (url.origin === self.location.origin) {
     if (url.pathname.startsWith("/api/")) return; // 데이터는 항상 네트워크
-    if (url.pathname.startsWith("/_next/static/") || url.pathname === "/icon.svg" || url.pathname === "/manifest.webmanifest") {
-      event.respondWith(cacheFirst(STATIC, req));
-    }
+    if (isStaticPath(url.pathname)) event.respondWith(cacheFirst(STATIC, req));
     return;
   }
 

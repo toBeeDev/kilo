@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /* ---------- 버튼 ---------- */
 
@@ -162,6 +162,15 @@ export function Stepper({
 }) {
   const btn =
     "h-10 w-10 shrink-0 rounded-full text-lg font-medium flex items-center justify-center active:scale-95 transition";
+  // 입력 중 텍스트는 따로 둔다. 숫자로 바로 바꾸면 "47." 의 점이 사라져 소수점을 못 친다.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (Number.isInteger(value) ? String(value) : value.toFixed(1));
+  const commit = () => {
+    if (draft === null) return;
+    const n = parseFloat(draft.replace(",", "."));
+    if (Number.isFinite(n)) onChange(Math.max(min, n));
+    setDraft(null);
+  };
   return (
     <div className="flex flex-col items-center">
       <span className="mb-2 text-[13px]" style={{ color: "var(--muted)" }}>
@@ -180,11 +189,12 @@ export function Stepper({
         <input
           inputMode="decimal"
           className="num w-16 bg-transparent text-center text-[28px] font-bold outline-none"
-          value={Number.isInteger(value) ? value : value.toFixed(1)}
-          onChange={(e) => {
-            const n = parseFloat(e.target.value);
-            if (Number.isFinite(n)) onChange(n);
-          }}
+          value={shown}
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d.,]/g, ""))}
+          onBlur={commit}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          aria-label={label}
         />
         <button
           type="button"

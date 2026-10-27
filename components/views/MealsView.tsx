@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
 import { errorText, useToast } from "@/components/Toast";
-import { SLOTS, SLOT_LABEL, todayStr, type FavoriteMeal, type MealLog } from "@/lib/types";
+import { useDay, useLatest } from "@/lib/useToday";
+import { SLOTS, SLOT_LABEL, type FavoriteMeal, type MealLog } from "@/lib/types";
 import { FavoriteCard, MealPhoto, MealSheet } from "@/components/Meal";
 import { MacroRatioBar } from "@/components/Nutrition";
 import { Button, Card, Empty } from "@/components/ui";
@@ -13,22 +14,25 @@ import { DayHeader } from "@/components/DayNav";
 export default function MealsView() {
   const { repo, ready } = useRepo();
   const toast = useToast();
-  const today = todayStr();
-  const [day, setDay] = useState(today);
+  const [day, setDay, today] = useDay();
   const isToday = day === today;
+  const req = useLatest();
   const [meals, setMeals] = useState<MealLog[]>([]);
   const [favs, setFavs] = useState<FavoriteMeal[]>([]);
   const [editFavs, setEditFavs] = useState(false);
   const [sheet, setSheet] = useState<{ existing?: MealLog; preset?: FavoriteMeal } | null>(null);
 
   const load = useCallback(async () => {
+    const t = req.token();
     try {
       const [m, f] = await Promise.all([repo.listMeals(day), repo.listFavorites()]);
+      if (!req.fresh(t)) return;
       setMeals(m);
       setFavs(f);
     } catch (e) {
-      toast(errorText(e, "식단을 못 불러왔어."));
+      if (req.fresh(t)) toast(errorText(e, "식단을 못 불러왔어."));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, day, toast]);
   useEffect(() => {
     if (ready) load();

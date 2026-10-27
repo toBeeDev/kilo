@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
 import type { PhotoRef } from "@/lib/repo";
 import { apiFetch } from "@/lib/http";
+import { useToast } from "./Toast";
 import { downscale, thumbnail } from "@/lib/image";
 import {
   SLOTS,
@@ -110,6 +111,7 @@ export function MealSheet({
   onDeleted?: () => void;
 }) {
   const { repo } = useRepo();
+  const toast = useToast();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [slot, setSlot] = useState<MealSlot>(initialSlot ?? guessSlot());
@@ -244,6 +246,7 @@ export function MealSheet({
       });
       // 사진을 바꿨거나 뺐으면 예전 파일 정리
       if (existing?.photoPath && existing.photoPath !== ref?.photoPath) await repo.deletePhoto(existing.photoPath);
+      if (ref?.photo && !saved.photo) toast("저장 공간이 부족해서 사진은 빼고 기록만 남겼어. 마이 탭에서 용량을 확인해.", "info");
       onSaved(saved);
       onClose();
     } catch (e) {

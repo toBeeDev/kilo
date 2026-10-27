@@ -6,7 +6,7 @@
   --card: #ffffff;
   --card-2: #f0f0f0;
   --ink: #111111;
-  --muted: #7a7a7a;
+  --muted: #666666; /* #f5f5f5 위 5.3:1, 흰 카드 위 5.7:1 (WCAG AA) */
   --line: #e4e4e4;
   /* 메인: 화이트/블랙 */
   --accent: #111111;

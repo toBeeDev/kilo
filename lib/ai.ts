@@ -129,8 +129,42 @@ export async function parseInbodyImage(
   meta: AiCallMeta,
 ): Promise<InbodyParsed> {
   const out = await ask({ text: INBODY_PROMPT, image: { base64, mediaType }, maxTokens: 400 }, meta);
-  const parsed = extractJson<Partial<InbodyParsed>>(out);
-  return { ...parsed, confidence: parsed.confidence ?? "medium" };
+  return validateInbody(extractJson<Partial<InbodyParsed>>(out));
+}
+
+/** 모델이 준 값을 사람 범위로 거른다. 범위 밖이면 그 항목만 버리고 confidence를 낮춘다. */
+export function validateInbody(p: Partial<InbodyParsed>): InbodyParsed {
+  const inRange = (v: unknown, lo: number, hi: number) => {
+    const n = typeof v === "string" ? parseFloat(v.replace(/[^\d.]/g, "")) : Number(v);
+    return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n * 10) / 10 : undefined;
+  };
+  const weight = inRange(p.weight, 20, 300);
+  const bodyFatPct = inRange(p.bodyFatPct, 1, 70);
+  const skeletalMuscle = inRange(p.skeletalMuscle, 5, 100);
+  const bodyFatMass = inRange(p.bodyFatMass, 0.5, 200);
+  let measuredOn: string | undefined;
+  if (typeof p.measuredOn === "string") {
+    const m = p.measuredOn.match(/(\d{4})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})/);
+    if (m) {
+      const iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+      const d = new Date(iso + "T00:00:00");
+      const today = new Date();
+      if (!Number.isNaN(d.getTime()) && d.getFullYear() >= 2000 && d.getTime() <= today.getTime() + 86_400_000) measuredOn = iso;
+    }
+  }
+  const dropped = [p.weight, p.bodyFatPct].some((v) => v != null) && (weight === undefined || bodyFatPct === undefined);
+  // 골격근이 체중보다 크거나 체지방량이 체중보다 크면 뭔가 잘못 읽은 것
+  const inconsistent = (weight && skeletalMuscle && skeletalMuscle > weight) || (weight && bodyFatMass && bodyFatMass > weight);
+  const conf: InbodyParsed["confidence"] = dropped || inconsistent ? "low" : p.confidence === "high" || p.confidence === "low" ? p.confidence : "medium";
+  return {
+    measuredOn,
+    weight,
+    bodyFatPct,
+    skeletalMuscle: inconsistent ? undefined : skeletalMuscle,
+    bodyFatMass: inconsistent ? undefined : bodyFatMass,
+    confidence: conf,
+    notes: typeof p.notes === "string" ? p.notes.slice(0, 200) : undefined,
+  };
 }
 
 /* ---------------- 식단 ---------------- */
@@ -169,16 +203,28 @@ export async function parseMeal(
     meta,
   );
   const parsed = extractJson<MealParsed>(out);
-  const items = (parsed.items ?? []).map((i) => ({
-    name: String(i.name ?? "").trim(),
-    grams: Math.round(Number(i.grams) || 0),
-    kcal: Math.round(Number(i.kcal) || 0),
-    protein: Math.round(Number(i.protein) || 0),
-    fat: Math.round(Number(i.fat) || 0),
-    carbs: Math.round(Number(i.carbs) || 0),
-    sodium: Math.round(Number(i.sodium) || 0),
-  }));
-  return { items, note: parsed.note };
+  return { items: validateMealItems(parsed.items), note: typeof parsed.note === "string" ? parsed.note.slice(0, 300) : undefined };
+}
+
+/** 이름 없는 항목, 전부 0인 항목, 말도 안 되는 값(한 끼 10,000kcal 초과)은 버린다. 최대 30개. */
+export function validateMealItems(raw: unknown): MealItem[] {
+  if (!Array.isArray(raw)) return [];
+  const clamp = (v: unknown, hi: number) => {
+    const n = Math.round(Number(v) || 0);
+    return n < 0 ? 0 : n > hi ? hi : n;
+  };
+  return raw
+    .slice(0, 30)
+    .map((i: Record<string, unknown>) => ({
+      name: String(i?.name ?? "").trim().slice(0, 60),
+      grams: clamp(i?.grams, 5000),
+      kcal: clamp(i?.kcal, 10_000),
+      protein: clamp(i?.protein, 1000),
+      fat: clamp(i?.fat, 1000),
+      carbs: clamp(i?.carbs, 2000),
+      sodium: clamp(i?.sodium, 20_000),
+    }))
+    .filter((i) => i.name && (i.kcal > 0 || i.protein > 0 || i.fat > 0 || i.carbs > 0));
 }
 
 /* ---------------- 하루 총평 ---------------- */

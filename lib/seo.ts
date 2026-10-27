@@ -53,7 +53,7 @@ export function buildMetadata(p: PageSeo): Metadata {
       url,
       title: ogTitle,
       description: p.description,
-      images: [{ url: "/icon.svg", alt: SITE.name }],
+      images: [{ url: "/icons/512", width: 512, height: 512, alt: SITE.name }],
     },
     twitter: { card: "summary", title: ogTitle, description: p.description },
     robots: p.noIndex ? { index: false, follow: false } : { index: true, follow: true },

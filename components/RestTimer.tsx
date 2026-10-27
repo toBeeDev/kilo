@@ -4,10 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 /**
  * 세트 사이 휴식 타이머. 세트 기록 버튼 누르면 자동 시작.
- * 끝나면 진동 + 짧은 비프. 기본 90초, 선호값은 localStorage.
+ * 끝나면 진동 + 짧은 비프 + 탭 제목 깜빡임. 기본 90초, 선호값은 localStorage.
+ * Provider는 (app) 레이아웃에 있어서 탭을 옮겨도 살아 있고, 진행 중 상태는 sessionStorage에 둬서 새로고침도 버틴다.
+ * iOS: 진동 API 없음, 무음 스위치면 소리도 안 남 → 화면(떠 있는 바)이 기본 알림.
  */
 
 const PREF_KEY = "kilo:rest:v1";
+const RUN_KEY = "kilo:rest:running";
 export const REST_OPTIONS = [60, 90, 120, 180] as const;
 
 interface Ctx {
@@ -43,10 +46,24 @@ export function RestTimerProvider({ children }: { children: React.ReactNode }) {
     try {
       const v = Number(localStorage.getItem(PREF_KEY));
       if (v > 0) setPreferredState(v);
+      // 새로고침 전 돌고 있던 타이머 복원
+      const run = JSON.parse(sessionStorage.getItem(RUN_KEY) ?? "null") as { endsAt: number; total: number } | null;
+      if (run && run.endsAt > Date.now()) {
+        setEndsAt(run.endsAt);
+        setTotal(run.total);
+      }
     } catch {
       /* ignore */
     }
   }, []);
+  useEffect(() => {
+    try {
+      if (endsAt) sessionStorage.setItem(RUN_KEY, JSON.stringify({ endsAt, total }));
+      else sessionStorage.removeItem(RUN_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [endsAt, total]);
 
   const setPreferred = useCallback((s: number) => {
     setPreferredState(s);
@@ -79,6 +96,20 @@ export function RestTimerProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       navigator.vibrate?.([200, 100, 200]);
+    } catch {
+      /* ignore */
+    }
+    // iOS처럼 진동·소리가 안 되는 환경: 탭 제목을 잠깐 바꿔 눈에 띄게
+    try {
+      const orig = document.title;
+      let n = 0;
+      const id = setInterval(() => {
+        document.title = n % 2 ? orig : "⏱ 휴식 끝!";
+        if (++n > 6) {
+          clearInterval(id);
+          document.title = orig;
+        }
+      }, 500);
     } catch {
       /* ignore */
     }

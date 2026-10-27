@@ -147,9 +147,18 @@ export function InbodySheet({
 
   const w = num(weight);
   const bf = num(fat);
-  const curr = w !== undefined && bf !== undefined && w > 0 && bf >= 0 && bf < 100
-    ? { weight: w, bodyFatPct: bf, skeletalMuscle: num(smm), date }
-    : null;
+  const sm = num(smm);
+  const rangeError =
+    w !== undefined && (w < 20 || w > 300)
+      ? "체중은 20~300kg 사이로."
+      : bf !== undefined && (bf < 1 || bf > 70)
+        ? "체지방률은 1~70% 사이로."
+        : sm !== undefined && (sm < 5 || sm > 100 || (w !== undefined && sm > w))
+          ? "골격근량이 이상해. 체중보다 작아야 해."
+          : date > todayStr()
+            ? "측정일이 미래야."
+            : null;
+  const curr = w !== undefined && bf !== undefined && !rangeError ? { weight: w, bodyFatPct: bf, skeletalMuscle: sm, date } : null;
 
   const prevMetrics = latest
     ? { weight: latest.weight, bodyFatPct: latest.bodyFatPct, skeletalMuscle: latest.skeletalMuscle, date: latest.measuredOn }
@@ -212,9 +221,9 @@ export function InbodySheet({
           {readNote}
         </p>
       )}
-      {error && (
+      {(error || rangeError) && (
         <p className="mt-2 text-[13px]" style={{ color: "var(--danger)" }}>
-          {error}
+          {error ?? rangeError}
         </p>
       )}
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useRepo } from "@/lib/repo-provider";
 import { apiFetch } from "@/lib/http";
+import { useDay, useLatest } from "@/lib/useToday";
 import { errorText, useToast } from "@/components/Toast";
 import { GOAL_LABEL, calcTarget, waterTarget } from "@/lib/macros";
 import { MUSCLE_KO, exercise } from "@/lib/exercises";
@@ -34,9 +35,10 @@ export default function HomeView() {
   const router = useRouter();
   const toast = useToast();
   const name = (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "게스트") as string;
-  const today = todayStr();
-  const [day, setDay] = useState(today);
-  const [month, setMonth] = useState(ymOf(today));
+  const [day, setDay, today] = useDay();
+  const [month, setMonth] = useState(() => ymOf(todayStr()));
+  const dayReq = useLatest();
+  const monthReq = useLatest();
   const [latest, setLatest] = useState<BodyRecord | null>(null);
   const [totals, setTotals] = useState<Map<string, DayTotal>>(new Map());
   const [meals, setMeals] = useState<MealLog[]>([]);
@@ -48,15 +50,19 @@ export default function HomeView() {
 
   const loadMonth = useCallback(async () => {
     const { first, last } = monthRange(month);
+    const t = monthReq.token();
     try {
       const rows = await repo.dailyTotals(shiftDay(first, -14), last);
+      if (!monthReq.fresh(t)) return;
       setTotals(new Map(rows.map((r) => [r.day, r])));
     } catch (e) {
-      toast(errorText(e, "달력을 못 불러왔어."));
+      if (monthReq.fresh(t)) toast(errorText(e, "달력을 못 불러왔어."));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, month, toast]);
 
   const loadDay = useCallback(async () => {
+    const t = dayReq.token();
     try {
       const [b, m, s, w, sm] = await Promise.all([
         repo.listBody(),
@@ -65,14 +71,16 @@ export default function HomeView() {
         repo.getWater(day),
         repo.getSummary(day),
       ]);
+      if (!dayReq.fresh(t)) return;
       setLatest(b[0] ?? null);
       setMeals(m);
       setSets(s);
       setWater(w);
       setSummary(sm);
     } catch (e) {
-      toast(errorText(e, "기록을 못 불러왔어."));
+      if (dayReq.fresh(t)) toast(errorText(e, "기록을 못 불러왔어."));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, day, toast]);
 
   useEffect(() => {
@@ -234,7 +242,7 @@ export default function HomeView() {
                 </span>
               }
               viz={<RingMini ratio={water / wTarget} color="var(--water)" />}
-              onClick={isToday || meals.length > 0 ? () => setWaterOpen((v) => !v) : undefined}
+              onClick={() => setWaterOpen((v) => !v)}
               active={waterOpen}
             />
             <Tile
