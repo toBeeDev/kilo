@@ -10,7 +10,7 @@ export const MAX_JSON_BYTES = 64 * 1024;
 export function requireAi() {
   if (!isAiConfigured()) {
     return NextResponse.json(
-      { error: "AI 키가 없어. .env.local에 GOOGLE_API_KEY(또는 ANTHROPIC_API_KEY) 넣고 서버 재시작." },
+      { error: "AI 키가 없어. GOOGLE_API_KEY(또는 ANTHROPIC_API_KEY)를 환경변수에 넣어. 로컬은 .env.local, 배포는 Vercel 설정." },
       { status: 503 },
     );
   }

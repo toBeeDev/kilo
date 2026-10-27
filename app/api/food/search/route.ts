@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (!g.ok) return g.res;
   if (!isMfdsConfigured()) {
     return NextResponse.json(
-      { error: "식약처 API 키가 없어. 공공데이터포털에서 '식품의약품안전처_식품영양성분DB정보' 신청하고 .env.local에 MFDS_API_KEY." },
+      { error: "식약처 API 키가 없어. 공공데이터포털에서 '식품의약품안전처_식품영양성분DB정보' 신청하고 MFDS_API_KEY를 환경변수에 넣어." },
       { status: 503 },
     );
   }
