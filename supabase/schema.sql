@@ -177,12 +177,19 @@ alter table workout_routines enable row level security;
 alter table workout_sets  enable row level security;
 alter table daily_summary enable row level security;
 
+drop policy if exists "own rows" on body_metrics;
 create policy "own rows" on body_metrics  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "own rows" on foods;
 create policy "own rows" on foods         for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "own rows" on meal_logs;
 create policy "own rows" on meal_logs     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "own rows" on favorite_meals;
 create policy "own rows" on favorite_meals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "own rows" on workout_routines;
 create policy "own rows" on workout_routines for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "own rows" on workout_sets;
 create policy "own rows" on workout_sets  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "own rows" on daily_summary;
 create policy "own rows" on daily_summary for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------
@@ -218,9 +225,12 @@ insert into storage.buckets (id, name, public)
 values ('meal-photos', 'meal-photos', true)
 on conflict (id) do nothing;
 
+drop policy if exists "photos: read" on storage.objects;
 create policy "photos: read" on storage.objects for select
   using (bucket_id = 'meal-photos');
+drop policy if exists "photos: write own folder" on storage.objects;
 create policy "photos: write own folder" on storage.objects for insert
   with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "photos: delete own folder" on storage.objects;
 create policy "photos: delete own folder" on storage.objects for delete
   using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);

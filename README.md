@@ -26,23 +26,47 @@ npm test
 
 | 키 | 역할 | 없으면 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | 식단 사진 파싱, 인바디 결과지 읽기 | 수동 입력 |
+| `GOOGLE_API_KEY` **또는** `ANTHROPIC_API_KEY` | 식단 사진 파싱, 인바디 결과지 읽기, 하루 총평. 둘 다 있으면 Google 우선 | 수동 입력 |
+| `AI_MODEL` | 모델 덮어쓰기. 기본 `gemini-2.5-flash` / `claude-haiku-5-5` | — |
 | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` | SSO 로그인 + 클라우드 저장 | 로컬 저장 |
 | `MFDS_API_KEY` | 식약처 식품영양성분DB 검색 (음식 행의 "DB" 버튼) | AI 추정값만 |
-| `AI_MODEL` | 기본 `claude-haiku-5-5` | — |
+| `NEXT_PUBLIC_SITE_URL` | SEO canonical/OG 주소 | Vercel 도메인 → localhost 추정 |
 
 식약처 키: [공공데이터포털](https://www.data.go.kr/data/15127578/openapi.do) → "식품의약품안전처_식품영양성분DB정보" 활용신청(개발계정 자동승인) → 일반 인증키 **Decoding** 값. 응답 필드 매핑(`AMT_NUM1` 에너지 등)은 `lib/mfds.ts` 상단 `FIELD` 한 곳 — 첫 검색에서 사과 단백질이 10g 넘게 나오면 거기 고치면 됨.
 
-### Supabase (SSO + 클라우드)
+### Supabase (SSO + 클라우드) 세팅 체크리스트
 
-1. 프로젝트 생성 → SQL Editor에 `supabase/schema.sql   # 7개 테이블(favorite_meals 포함) + RLS + 뷰 + 사진 버킷` 붙여넣기 (테이블 6개 + RLS + 뷰 + 사진 버킷)
-2. Authentication → Providers → **Google**, **Kakao** 켜기
-   - Kakao: [developers.kakao.com](https://developers.kakao.com) 앱 → REST API 키 + Client Secret → Supabase에 입력, Redirect URI는 Supabase가 보여주는 `https://<ref>.supabase.co/auth/v1/callback`
-   - Google: GCP OAuth 클라이언트 → 같은 Redirect URI
-3. Authentication → URL Configuration → Site URL `http://localhost:3000`, Redirect URLs에 `http://localhost:3000/auth/callback` (배포하면 도메인도)
-4. `.env.local` 채우고 재시작 → `/login`
+코드 쪽은 다 돼 있다. 아래는 Supabase 대시보드에서 한 번만 하면 되는 일. 순서대로.
 
-로그인 전에는 `/login`으로 보내고, "로그인 없이 쓰기" 누르면 게스트 쿠키로 통과. 로그인하면 `CloudRepo`, 아니면 `LocalRepo` — UI는 `lib/repo.ts` 인터페이스만 본다. 로컬 데이터는 클라우드로 자동 이관되지 않음 (필요하면 나중에).
+**1. 프로젝트**
+- [supabase.com](https://supabase.com) → New project. Region은 **Northeast Asia (Seoul)** 또는 Tokyo. DB 비밀번호는 따로 적어둘 것 (앱에선 안 씀).
+
+**2. 스키마**
+- SQL Editor → New query → `supabase/schema.sql` 전체 붙여넣기 → Run.
+- 만들어지는 것: 테이블 7개(`body_metrics`, `foods`, `meal_logs`, `favorite_meals`, `workout_routines`, `workout_sets`, `daily_summary`) + RLS(본인 row만) + 집계 뷰 2개 + `touch_*` 함수 2개 + 사진 버킷 `meal-photos`.
+- 확인: Table Editor에 테이블 7개, Storage에 `meal-photos` 버킷이 보이면 끝. 두 번 실행해도 안전(`if not exists`).
+- 사진 버킷은 **공개 읽기**(링크 아는 사람만)다. 비공개로 두려면 `schema.sql` 맨 아래 `public` 을 `false` 로 바꾸고, 앱의 `CloudRepo.uploadPhoto` 를 서명 URL 방식으로 바꿔야 한다(이슈로 남김).
+
+**3. 로그인 제공자** (Authentication → Providers)
+- **Kakao**: [developers.kakao.com](https://developers.kakao.com) → 앱 만들기 → 앱 키의 **REST API 키** = Client ID, 보안 → **Client Secret** 생성·활성화 = Client Secret. 카카오 로그인 → 활성화 ON, Redirect URI에 Supabase가 보여주는 `https://<ref>.supabase.co/auth/v1/callback` 등록. 동의항목에서 닉네임·프로필 사진(선택)·이메일(선택) 켜기.
+- **Google**: GCP → APIs & Services → OAuth 동의 화면(외부, 테스트 사용자에 본인 계정) → 사용자 인증 정보 → OAuth 클라이언트 ID(웹). 승인된 리디렉션 URI에 같은 `https://<ref>.supabase.co/auth/v1/callback`. Client ID/Secret을 Supabase Google 제공자에 입력.
+- 둘 중 하나만 켜도 된다. 혼자 쓰면 Kakao 하나로 충분.
+
+**4. 리다이렉트 허용** (Authentication → URL Configuration)
+- Site URL: 배포 주소 (예: `https://kilo.vercel.app`). 로컬 테스트 땐 `http://localhost:3000`.
+- Redirect URLs에 전부 추가: `http://localhost:3000/auth/callback`, `https://<배포도메인>/auth/callback`, Vercel 프리뷰도 쓰면 `https://*-toBeeDev.vercel.app/auth/callback`.
+
+**5. 환경변수**
+- Project Settings → API 에서 **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`, **anon public** 키 → `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- 로컬은 `.env.local`, 배포는 Vercel → Settings → Environment Variables. 넣고 재배포(또는 로컬 재시작).
+- `service_role` 키는 앱에서 안 쓴다. 어디에도 넣지 말 것.
+
+**6. 확인**
+- `/login` 에서 Kakao/Google 로그인 → 홈으로 돌아오고 마이 탭에 "클라우드 저장"이 보이면 성공.
+- 게스트로 쓰던 기록이 있으면 마이 탭에 "이 기기에 남은 기록" 카드가 뜬다 → "클라우드로 옮기기" 한 번 (인바디·식사·세트·즐겨찾기·루틴 전부).
+- 사진 기록 한 번 올려서 Storage → `meal-photos/<user-id>/` 에 파일이 생기는지 본다.
+
+로그인 전에는 `/login`으로 보내고, "로그인 없이 쓰기" 누르면 게스트 쿠키로 통과. 로그인하면 `CloudRepo`, 아니면 `LocalRepo` — UI는 `lib/repo.ts` 인터페이스만 본다.
 
 ## 구조
 
