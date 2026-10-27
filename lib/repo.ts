@@ -1,7 +1,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BodyRecord, DaySummary, DayTotal, FavoriteMeal, MealLog, WorkoutSet } from "./types";
+import type { BodyRecord, DaySummary, DayTotal, FavoriteMeal, MealLog, WorkoutRoutine, WorkoutSet } from "./types";
 import { uid } from "./types";
 
 /**
@@ -32,6 +32,11 @@ export interface Repo {
   saveSets(sets: WorkoutSet[]): Promise<void>;
   deleteSet(id: string): Promise<void>;
   recentWorkoutDays(limit: number): Promise<{ day: string; volume: number; sets: number }[]>;
+
+  listRoutines(): Promise<WorkoutRoutine[]>; // 많이 쓴 순
+  saveRoutine(r: Omit<WorkoutRoutine, "id" | "useCount" | "lastUsed"> & { id?: string }): Promise<WorkoutRoutine>;
+  touchRoutine(id: string): Promise<void>; // 사용 횟수 +1
+  deleteRoutine(id: string): Promise<void>;
   /** 분석용: 기간 내 모든 세트 */
   setsInRange(from: string, to: string): Promise<WorkoutSet[]>;
   /** 달력용: 기간 내 날짜별 식단·운동 합계 */
@@ -55,6 +60,7 @@ const K = {
   meals: "kilo:meals:v1",
   sets: "kilo:sets:v1",
   favs: "kilo:favs:v1",
+  routines: "kilo:routines:v1",
   water: "kilo:water:v1",
   summary: "kilo:summary:v1",
 };
@@ -70,7 +76,9 @@ function readMap<T>(key: string): Record<string, T> {
 }
 
 const sortFavs = (rows: FavoriteMeal[]) =>
-  rows.sort((a, b) => b.useCount - a.useCount || (a.lastUsed ?? "") < (b.lastUsed ?? "") ? 1 : -1);
+  rows.sort((a, b) => b.useCount - a.useCount || ((a.lastUsed ?? "") < (b.lastUsed ?? "") ? 1 : -1));
+const sortRoutines = (rows: WorkoutRoutine[]) =>
+  rows.sort((a, b) => b.useCount - a.useCount || ((a.lastUsed ?? "") < (b.lastUsed ?? "") ? 1 : -1));
 
 function read<T>(key: string): T[] {
   try {
@@ -159,6 +167,30 @@ export class LocalRepo implements Repo {
   }
   async deleteFavorite(id: string) {
     write(K.favs, read<FavoriteMeal>(K.favs).filter((x) => x.id !== id));
+  }
+
+  async listRoutines() {
+    return sortRoutines(read<WorkoutRoutine>(K.routines));
+  }
+  async saveRoutine(r: Omit<WorkoutRoutine, "id" | "useCount" | "lastUsed"> & { id?: string }) {
+    const rows = read<WorkoutRoutine>(K.routines);
+    const i = rows.findIndex((x) => x.id === r.id);
+    const row: WorkoutRoutine = { useCount: 0, ...(i >= 0 ? rows[i] : {}), ...r, id: r.id ?? uid() };
+    if (i >= 0) rows[i] = row;
+    else rows.push(row);
+    write(K.routines, rows);
+    return row;
+  }
+  async touchRoutine(id: string) {
+    const rows = read<WorkoutRoutine>(K.routines);
+    const r = rows.find((x) => x.id === id);
+    if (!r) return;
+    r.useCount += 1;
+    r.lastUsed = new Date().toISOString();
+    write(K.routines, rows);
+  }
+  async deleteRoutine(id: string) {
+    write(K.routines, read<WorkoutRoutine>(K.routines).filter((x) => x.id !== id));
   }
 
   async listSets(day: string) {
@@ -424,6 +456,42 @@ export class CloudRepo implements Repo {
   }
   async deleteFavorite(id: string) {
     const { error } = await this.sb.from("favorite_meals").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  private routineFrom(r: Row): WorkoutRoutine {
+    return {
+      id: r.id as string,
+      name: r.name as string,
+      exerciseIds: (r.exercise_keys as string[]) ?? [],
+      useCount: Number(r.use_count ?? 0),
+      lastUsed: (r.last_used_at as string) ?? undefined,
+    };
+  }
+  async listRoutines() {
+    const { data, error } = await this.sb
+      .from("workout_routines")
+      .select("*")
+      .order("use_count", { ascending: false })
+      .order("last_used_at", { ascending: false, nullsFirst: false });
+    if (error) throw error;
+    return (data as Row[]).map((r) => this.routineFrom(r));
+  }
+  async saveRoutine(r: Omit<WorkoutRoutine, "id" | "useCount" | "lastUsed"> & { id?: string }) {
+    const { data, error } = await this.sb
+      .from("workout_routines")
+      .upsert({ ...(r.id ? { id: r.id } : {}), user_id: this.userId, name: r.name, exercise_keys: r.exerciseIds })
+      .select()
+      .single();
+    if (error) throw error;
+    return this.routineFrom(data as Row);
+  }
+  async touchRoutine(id: string) {
+    const { error } = await this.sb.rpc("touch_workout_routine", { routine_id: id });
+    if (error) throw error;
+  }
+  async deleteRoutine(id: string) {
+    const { error } = await this.sb.from("workout_routines").delete().eq("id", id);
     if (error) throw error;
   }
 

@@ -8,6 +8,7 @@ import { BodyMap, muscleScores } from "@/components/Body";
 import WorkoutCharts from "@/components/WorkoutCharts";
 import { ExerciseDemo, ExercisePicker, SetLogger } from "@/components/Workout";
 import { FloatingRestTimer, RestTimerProvider } from "@/components/RestTimer";
+import { RoutineSheet } from "@/components/Routine";
 import { PageHeader } from "@/components/PageHeader";
 import { DayNav } from "@/components/DayNav";
 import { Button, Card, Empty, Segmented } from "@/components/ui";
@@ -45,6 +46,7 @@ function WorkoutInner() {
   const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [order, setOrder] = useState<string[]>([]); // 오늘 종목 순서 (세트 0개도 유지)
   const [picker, setPicker] = useState(false);
+  const [routineOpen, setRoutineOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [history, setHistory] = useState<WorkoutSet[]>([]); // 최근 8주
 
@@ -71,6 +73,9 @@ function WorkoutInner() {
     setOrder((o) => (o.includes(e.id) ? o : [...o, e.id]));
     setActive(e.id);
   };
+
+  /** 루틴 불러오기: 이미 있는 종목은 건너뛰고 뒤에 붙인다 */
+  const loadRoutine = (ids: string[]) => setOrder((o) => [...o, ...ids.filter((id) => !o.includes(id))]);
 
   const setsOf = (id: string) => sets.filter((s) => s.exerciseId === id);
 
@@ -202,14 +207,20 @@ function WorkoutInner() {
 
           {!order.length && <Empty title={isToday ? "오늘 운동 아직 없음" : "이 날 운동 기록 없음"} body="종목을 고르면 지난번 무게가 자동으로 채워져." />}
 
-          <Button className="mt-4 w-full" size="lg" onClick={() => setPicker(true)}>
-            종목 추가
-          </Button>
+          <div className="mt-4 flex gap-2">
+            <Button className="w-28 shrink-0" size="lg" variant="secondary" onClick={() => setRoutineOpen(true)}>
+              루틴
+            </Button>
+            <Button className="flex-1" size="lg" onClick={() => setPicker(true)}>
+              종목 추가
+            </Button>
+          </div>
         </>
       )}
 
       {active === null && <FloatingRestTimer />}
       <ExercisePicker open={picker} onClose={() => setPicker(false)} onPick={pick} />
+      <RoutineSheet open={routineOpen} onClose={() => setRoutineOpen(false)} currentIds={order} onLoad={loadRoutine} />
       <SetLogger
         open={active !== null}
         onClose={() => setActive(null)}

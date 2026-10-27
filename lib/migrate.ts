@@ -15,6 +15,7 @@ export interface LocalCounts {
   meals: number;
   sets: number;
   favs: number;
+  routines: number;
   total: number;
 }
 
@@ -29,8 +30,8 @@ export function localCounts(): LocalCounts {
       return 0;
     }
   };
-  const c = { body: n(LOCAL_KEYS.body), meals: n(LOCAL_KEYS.meals), sets: n(LOCAL_KEYS.sets), favs: n(LOCAL_KEYS.favs), total: 0 };
-  c.total = c.body + c.meals + c.sets + c.favs;
+  const c = { body: n(LOCAL_KEYS.body), meals: n(LOCAL_KEYS.meals), sets: n(LOCAL_KEYS.sets), favs: n(LOCAL_KEYS.favs), routines: n(LOCAL_KEYS.routines), total: 0 };
+  c.total = c.body + c.meals + c.sets + c.favs + c.routines;
   return c;
 }
 
@@ -92,6 +93,9 @@ export async function migrateLocalToCloud(
     }
     await cloud.saveFavorite({ ...f, id: undefined, photo });
   }
+
+  onProgress(`루틴 ${counts.routines}개`);
+  for (const r of await local.listRoutines()) await cloud.saveRoutine({ ...r, id: undefined });
 
   onProgress("물·총평");
   const water = readMap<number>(LOCAL_KEYS.water);

@@ -99,6 +99,15 @@ export interface WorkoutSet {
   note?: string;
 }
 
+/** 루틴 템플릿. 종목 묶음을 이름으로 저장해 두고 한 번에 불러온다. 세트 무게는 불러올 때 지난번 값이 채워진다. */
+export interface WorkoutRoutine {
+  id: string;
+  name: string;
+  exerciseIds: string[];
+  useCount: number;
+  lastUsed?: string; // ISO datetime
+}
+
 /** 달력 셀 하나 */
 export interface DayTotal {
   day: string;

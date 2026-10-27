@@ -84,7 +84,7 @@ export default function MePage() {
         <Card className="mt-5" style={{ border: "1px solid var(--ink)" }}>
           <div className="text-[15px] font-semibold">이 기기에 남은 기록이 있어</div>
           <p className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>
-            인바디 {local.body} · 식사 {local.meals} · 세트 {local.sets} · 즐겨찾기 {local.favs}. 클라우드로 옮기면 폰에서도 보여.
+            인바디 {local.body} · 식사 {local.meals} · 세트 {local.sets} · 즐겨찾기 {local.favs} · 루틴 {local.routines}. 클라우드로 옮기면 폰에서도 보여.
           </p>
           {migrating ? (
             <p className="mt-3 text-[13px] font-semibold">옮기는 중… {migrating}</p>

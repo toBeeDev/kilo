@@ -95,6 +95,27 @@ returns void language sql security invoker as $$
 $$;
 
 -- ---------------------------------------------------------------
+-- 3c. workout_routines — 루틴 템플릿. 종목 묶음을 이름으로 저장.
+-- ---------------------------------------------------------------
+create table if not exists workout_routines (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  name          text not null,
+  exercise_keys jsonb not null default '[]'::jsonb, -- free-exercise-db id 배열
+  use_count     integer not null default 0,
+  last_used_at  timestamptz,
+  created_at    timestamptz not null default now()
+);
+create index if not exists workout_routines_user_idx on workout_routines (user_id, use_count desc);
+
+create or replace function touch_workout_routine(routine_id uuid)
+returns void language sql security invoker as $$
+  update workout_routines
+     set use_count = use_count + 1, last_used_at = now()
+   where id = routine_id and user_id = auth.uid();
+$$;
+
+-- ---------------------------------------------------------------
 -- 4. (종목 마스터 없음) 종목은 앱의 lib/exercises.json 이 관리.
 --    workout_sets.exercise_key 에 free-exercise-db id 문자열을 저장.
 -- ---------------------------------------------------------------
@@ -152,6 +173,7 @@ alter table body_metrics  enable row level security;
 alter table foods         enable row level security;
 alter table meal_logs     enable row level security;
 alter table favorite_meals enable row level security;
+alter table workout_routines enable row level security;
 alter table workout_sets  enable row level security;
 alter table daily_summary enable row level security;
 
@@ -159,6 +181,7 @@ create policy "own rows" on body_metrics  for all using (auth.uid() = user_id) w
 create policy "own rows" on foods         for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rows" on meal_logs     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rows" on favorite_meals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own rows" on workout_routines for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rows" on workout_sets  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rows" on daily_summary for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
