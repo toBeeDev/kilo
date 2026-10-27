@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ServiceWorker from "@/components/ServiceWorker";
 
 export const metadata: Metadata = {
   title: "kilo",
@@ -24,7 +25,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh">
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }
