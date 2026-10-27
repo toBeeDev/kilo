@@ -88,6 +88,39 @@ iOS는 홈 화면에 추가한 앱에서 OAuth를 시작하면 Safari로 빠져�
 
 로그인 전에는 `/login`으로 보내고, "로그인 없이 쓰기" 누르면 게스트 쿠키로 통과. 로그인하면 `CloudRepo`, 아니면 `LocalRepo` — UI는 `lib/repo.ts` 인터페이스만 본다.
 
+## 배포 (Vercel)
+
+GitHub 연동으로 올린다. CLI 없이 대시보드에서 끝난다.
+
+**1. 프로젝트 만들기**
+- [vercel.com/new](https://vercel.com/new) → Import Git Repository → `toBeeDev/kilo`. Framework는 Next.js로 자동 감지. Root Directory는 비워 둔다.
+- `vercel.json` 이 함수 리전을 서울(`icn1`)로 고정한다. Supabase를 서울에 두면 왕복이 짧다.
+
+**2. 환경변수** (Settings → Environment Variables, Production + Preview 둘 다 체크)
+
+| 키 | 값 | 비고 |
+|---|---|---|
+| `GOOGLE_API_KEY` | AI Studio 키 | 선불 잔액이 있어야 호출된다 |
+| `AI_LIMIT_SECRET` | 긴 랜덤 문자열 | `openssl rand -base64 32`. 키를 바꿔도 사용량 쿠키가 안 깨진다 |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 프로젝트 값 | 없으면 로컬 저장 모드로 뜬다 (먼저 배포하고 나중에 넣어도 됨) |
+| `MFDS_API_KEY` | 식약처 디코딩 키 | 선택 |
+| `NEXT_PUBLIC_SITE_URL` | `https://<도메인>` | 비우면 Vercel 프로덕션 도메인으로 추정. 커스텀 도메인 쓰면 넣는다 |
+
+`AI_MODEL`, `AI_DAILY_*`, `AI_ALLOW_GUEST` 는 기본값으로 두고, 필요할 때만 추가.
+
+**3. Deploy** 누르면 끝. 이후엔 `main` 에 push 할 때마다 자동 배포, PR 은 프리뷰 URL.
+
+**4. Supabase 쪽에 배포 주소 등록** (Supabase 쓸 때만)
+- Authentication → URL Configuration → Site URL 을 배포 주소로, Redirect URLs 에 `https://<도메인>/auth/callback` 추가. 프리뷰도 쓰면 `https://*-toBeeDev.vercel.app/auth/callback`.
+
+**5. 배포 후 확인**
+- `https://<도메인>/` 이 열리고 `/api/summary` 에 그냥 POST 하면 401 (가드 동작).
+- `/icons/512`, `/apple-icon` 이 PNG 로 뜬다. 아이폰 Safari → 공유 → 홈 화면에 추가 → 아이콘·standalone 확인.
+- Vercel → Logs 에서 `ai_usage` 검색 → 모델 호출마다 토큰·비용 한 줄.
+- 두 번째 배포부터는 서비스 워커가 `?v=<커밋>` 로 바뀌며 이전 캐시를 지운다.
+
+GitHub Actions(`.github/workflows/ci.yml`)가 push 마다 lint·타입체크·테스트·빌드를 돌린다. Vercel 빌드와 별개라, CI 가 빨간데 배포가 나가는 일은 없게 Vercel → Settings → Git → "Ignored Build Step" 은 건드리지 않아도 되고, 대신 GitHub 브랜치 보호에서 `ci / check` 를 필수로 걸면 된다.
+
 ## 구조
 
 ```
