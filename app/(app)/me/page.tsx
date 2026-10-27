@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from "@/lib/config";
 import { GOAL_LABEL } from "@/lib/macros";
 import type { BodyRecord } from "@/lib/types";
 import { InbodySheet, TargetSummary } from "@/components/Inbody";
+import BodyTrend from "@/components/BodyTrend";
 import { Button, Card, Empty } from "@/components/ui";
 import { CloudRepo } from "@/lib/repo";
 import { localCounts, migrateLocalToCloud, wasMigrated, type LocalCounts } from "@/lib/migrate";
@@ -113,6 +114,12 @@ export default function MePage() {
         <Button className="mt-3 w-full" size="lg" variant="secondary" onClick={() => setOpen(true)}>
           새 인바디 입력
         </Button>
+      )}
+
+      {records.length >= 2 && (
+        <div className="mt-5">
+          <BodyTrend records={records} />
+        </div>
       )}
 
       {records.length > 0 && (
