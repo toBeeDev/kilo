@@ -23,7 +23,7 @@ import {
   type WorkoutSet,
 } from "@/lib/types";
 import Calendar, { monthRange, ymOf } from "@/components/Calendar";
-import { CameraIcon, IconButton, PageHeader, timeGreeting } from "@/components/PageHeader";
+import { AppHeader, CameraIcon, IconButton, timeGreeting } from "@/components/PageHeader";
 import { MealPhoto, MealSheet } from "@/components/Meal";
 import { Button, Card } from "@/components/ui";
 
@@ -31,7 +31,6 @@ export default function HomePage() {
   const { repo, ready, user } = useRepo();
   const router = useRouter();
   const name = (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "게스트") as string;
-  const avatarSrc = user?.user_metadata?.avatar_url as string | undefined;
   const today = todayStr();
   const [day, setDay] = useState(today);
   const [month, setMonth] = useState(ymOf(today));
@@ -159,11 +158,10 @@ export default function HomePage() {
 
   return (
     <>
-      <PageHeader
-        avatar={{ src: avatarSrc, initial: name.slice(0, 1).toUpperCase() }}
-        subtitle={timeGreeting()}
-        title={`${name} 👋`}
-        right={
+      <AppHeader
+        title={`안녕, ${name} 👋`}
+        subtitle={`${timeGreeting()}. 오늘 먹은 것, 든 것 남기자.`}
+        actions={
           <IconButton onClick={() => setSheet({})} label="사진으로 기록">
             <CameraIcon />
           </IconButton>

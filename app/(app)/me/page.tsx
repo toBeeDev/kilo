@@ -8,6 +8,7 @@ import type { BodyRecord } from "@/lib/types";
 import { InbodySheet, TargetSummary } from "@/components/Inbody";
 import BodyTrend from "@/components/BodyTrend";
 import { Button, Card, Empty } from "@/components/ui";
+import { AppHeader } from "@/components/PageHeader";
 import { CloudRepo } from "@/lib/repo";
 import { localCounts, migrateLocalToCloud, wasMigrated, type LocalCounts } from "@/lib/migrate";
 
@@ -49,37 +50,28 @@ export default function MePage() {
 
   const latest = records[0] ?? null;
   const name = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "게스트";
-  const avatar = user?.user_metadata?.avatar_url as string | undefined;
 
   return (
     <>
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
-          ) : (
-            <div className="flex h-11 w-11 items-center justify-center rounded-full text-lg font-bold" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
-              {String(name).slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <div className="text-[17px] font-bold">{name}</div>
-            <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-              {repo.mode === "cloud" ? "클라우드 저장" : "이 기기에만 저장"}
-            </div>
-          </div>
-        </div>
-        {user ? (
-          <Button variant="ghost" size="sm" onClick={signOut}>
-            로그아웃
-          </Button>
-        ) : isSupabaseConfigured() ? (
-          <a href="/login" className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-            로그인
-          </a>
-        ) : null}
-      </header>
+      <AppHeader
+        title={String(name)}
+        subtitle={repo.mode === "cloud" ? "클라우드 저장 · 어디서든 같은 기록" : "이 기기에만 저장 · 로그인하면 폰에서도 보여"}
+        account={!!user}
+        leading={
+          !user && isSupabaseConfigured() ? (
+            <a href="/login" className="flex h-11 items-center rounded-full px-4 text-[13px] font-semibold" style={{ background: "var(--ink)", color: "#fff" }}>
+              로그인
+            </a>
+          ) : undefined
+        }
+        actions={
+          user ? (
+            <Button variant="ghost" size="sm" onClick={signOut}>
+              로그아웃
+            </Button>
+          ) : undefined
+        }
+      />
 
       {local && (
         <Card className="mt-5" style={{ border: "1px solid var(--ink)" }}>
