@@ -9,8 +9,7 @@ import WorkoutCharts from "@/components/WorkoutCharts";
 import { ExerciseDemo, ExercisePicker, SetLogger } from "@/components/Workout";
 import { FloatingRestTimer, RestTimerProvider } from "@/components/RestTimer";
 import { RoutineSheet } from "@/components/Routine";
-import { PageHeader } from "@/components/PageHeader";
-import { DayNav } from "@/components/DayNav";
+import { DayHeader } from "@/components/DayNav";
 import { Button, Card, Empty, Segmented } from "@/components/ui";
 
 type View = "today" | "analysis";
@@ -104,8 +103,10 @@ function WorkoutInner() {
 
   return (
     <>
-      <PageHeader
+      <DayHeader
         title="운동"
+        day={day}
+        onChange={setDay}
         right={
           <div className="w-36">
             <Segmented<View>
@@ -119,7 +120,6 @@ function WorkoutInner() {
           </div>
         }
       />
-      <DayNav day={day} onChange={setDay} />
 
       {view === "analysis" ? (
         <div className="mt-4">

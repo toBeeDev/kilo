@@ -6,8 +6,8 @@ import { SLOTS, SLOT_LABEL, todayStr, type FavoriteMeal, type MealLog } from "@/
 import { FavoriteCard, MealPhoto, MealSheet } from "@/components/Meal";
 import { MacroRatioBar } from "@/components/Nutrition";
 import { Button, Card, Empty } from "@/components/ui";
-import { CameraIcon, IconButton, PageHeader } from "@/components/PageHeader";
-import { DayNav } from "@/components/DayNav";
+import { CameraIcon, IconButton } from "@/components/PageHeader";
+import { DayHeader } from "@/components/DayNav";
 
 export default function MealsPage() {
   const { repo, ready } = useRepo();
@@ -35,15 +35,16 @@ export default function MealsPage() {
 
   return (
     <>
-      <PageHeader
+      <DayHeader
         title="식단"
+        day={day}
+        onChange={setDay}
         right={
           <IconButton onClick={() => setSheet({})} label="사진으로 기록">
             <CameraIcon />
           </IconButton>
         }
       />
-      <DayNav day={day} onChange={setDay} />
 
       {/* 즐겨찾기 */}
       <section className="mt-5">
