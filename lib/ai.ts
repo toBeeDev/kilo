@@ -1,30 +1,65 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_MODEL, isAiConfigured } from "./config";
+import { GoogleGenAI } from "@google/genai";
+import { ANTHROPIC_MODEL, GEMINI_MODEL, aiProvider } from "./config";
 import type { MealItem } from "./types";
 
 /**
  * 서버 전용. 클라이언트에서 import 금지.
  * 모델은 "읽기/파싱"만 한다. 숫자 계산은 lib/macros.ts.
+ * provider는 환경변수로 결정 (config.aiProvider). 프롬프트는 provider와 무관.
  */
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 
-function client() {
-  if (!isAiConfigured()) throw new Error("ANTHROPIC_API_KEY 없음");
-  return new Anthropic();
+interface AskInput {
+  text: string;
+  image?: { base64: string; mediaType: ImageMediaType };
+  maxTokens: number;
+}
+
+/** 이미지(선택) + 텍스트 한 턴 → 모델 텍스트. JSON만 기대하는 호출이라 Gemini는 JSON 모드로 고정. */
+async function ask(input: AskInput): Promise<string> {
+  const provider = aiProvider();
+  if (provider === "gemini") return askGemini(input);
+  if (provider === "anthropic") return askAnthropic(input);
+  throw new Error("AI 키 없음 (GOOGLE_API_KEY 또는 ANTHROPIC_API_KEY)");
+}
+
+async function askGemini({ text, image, maxTokens }: AskInput): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+  const parts = [...(image ? [{ inlineData: { mimeType: image.mediaType, data: image.base64 } }] : []), { text }];
+  const res = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{ role: "user", parts }],
+    config: {
+      responseMimeType: "application/json",
+      // 파싱 작업이라 thinking 끔. 켜면 토큰 예산을 생각에 다 써서 응답이 잘린다.
+      thinkingConfig: { thinkingBudget: 0 },
+      maxOutputTokens: maxTokens,
+    },
+  });
+  return (res.text ?? "").trim();
+}
+
+async function askAnthropic({ text, image, maxTokens }: AskInput): Promise<string> {
+  const content: Anthropic.ContentBlockParam[] = [];
+  if (image) content.push({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.base64 } });
+  content.push({ type: "text", text });
+  const res = await new Anthropic().messages.create({
+    model: ANTHROPIC_MODEL,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content }],
+  });
+  return res.content
+    .map((b) => (b.type === "text" ? b.text : ""))
+    .join("")
+    .trim();
 }
 
 function extractJson<T>(text: string): T {
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("JSON 없음: " + text.slice(0, 200));
   return JSON.parse(m[0]) as T;
-}
-
-function textOf(res: Anthropic.Message): string {
-  return res.content
-    .map((b) => (b.type === "text" ? b.text : ""))
-    .join("")
-    .trim();
 }
 
 /* ---------------- 인바디 결과지 ---------------- */
@@ -55,20 +90,8 @@ export async function parseInbodyImage(
   base64: string,
   mediaType: ImageMediaType,
 ): Promise<InbodyParsed> {
-  const res = await client().messages.create({
-    model: AI_MODEL,
-    max_tokens: 400,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          { type: "text", text: INBODY_PROMPT },
-        ],
-      },
-    ],
-  });
-  const parsed = extractJson<Partial<InbodyParsed>>(textOf(res));
+  const out = await ask({ text: INBODY_PROMPT, image: { base64, mediaType }, maxTokens: 400 });
+  const parsed = extractJson<Partial<InbodyParsed>>(out);
   return { ...parsed, confidence: parsed.confidence ?? "medium" };
 }
 
@@ -95,24 +118,13 @@ export async function parseMeal(input: {
   mediaType?: ImageMediaType;
   text?: string;
 }): Promise<MealParsed> {
-  const content: Anthropic.ContentBlockParam[] = [];
-  if (input.base64 && input.mediaType) {
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: input.mediaType, data: input.base64 },
-    });
-  }
-  content.push({
-    type: "text",
+  const image = input.base64 && input.mediaType ? { base64: input.base64, mediaType: input.mediaType } : undefined;
+  const out = await ask({
     text: MEAL_PROMPT + (input.text ? `\n\n설명: ${input.text}` : ""),
+    image,
+    maxTokens: 800,
   });
-
-  const res = await client().messages.create({
-    model: AI_MODEL,
-    max_tokens: 800,
-    messages: [{ role: "user", content }],
-  });
-  const parsed = extractJson<MealParsed>(textOf(res));
+  const parsed = extractJson<MealParsed>(out);
   const items = (parsed.items ?? []).map((i) => ({
     name: String(i.name ?? "").trim(),
     grams: Math.round(Number(i.grams) || 0),
@@ -157,17 +169,8 @@ const SUMMARY_PROMPT = `너는 린매스업/벌크업/다이어트를 코칭하�
 형식: {"summary":"...","nextStep":"..."}`;
 
 export async function dailySummary(input: SummaryInput): Promise<SummaryOutput> {
-  const res = await client().messages.create({
-    model: AI_MODEL,
-    max_tokens: 500,
-    messages: [
-      {
-        role: "user",
-        content: SUMMARY_PROMPT + "\n\n기록:\n" + JSON.stringify(input, null, 1),
-      },
-    ],
-  });
-  const parsed = extractJson<Partial<SummaryOutput>>(textOf(res));
+  const out = await ask({ text: SUMMARY_PROMPT + "\n\n기록:\n" + JSON.stringify(input, null, 1), maxTokens: 500 });
+  const parsed = extractJson<Partial<SummaryOutput>>(out);
   return {
     summary: String(parsed.summary ?? "").trim(),
     nextStep: String(parsed.nextStep ?? "").trim(),

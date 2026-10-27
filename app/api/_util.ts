@@ -6,7 +6,7 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export function requireAi() {
   if (!isAiConfigured()) {
     return NextResponse.json(
-      { error: "AI 키가 없어. .env.local에 ANTHROPIC_API_KEY 넣고 서버 재시작." },
+      { error: "AI 키가 없어. .env.local에 GOOGLE_API_KEY(또는 ANTHROPIC_API_KEY) 넣고 서버 재시작." },
       { status: 503 },
     );
   }
