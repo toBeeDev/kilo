@@ -42,8 +42,12 @@ const get = (path, headers = H) => fetch(base + path, { headers, signal: AbortSi
 
 console.log(`\n[1] 연결  ${base}`);
 try {
-  const r = await get("/rest/v1/", H);
-  r.ok ? ok("REST 응답") : bad("REST 응답", `HTTP ${r.status} — URL 또는 anon 키 확인`);
+  // 루트(OpenAPI)는 프로젝트 설정에 따라 anon 에 401 을 줄 수 있어 테이블 하나로 확인한다
+  const r = await get("/rest/v1/meal_logs?select=id&limit=1", H);
+  if (r.status === 200) ok("REST 응답");
+  else if (r.status === 401 || r.status === 403) bad("REST 인증 실패", `HTTP ${r.status} — anon 키가 이 프로젝트 것인지 확인`);
+  else if (r.status === 404) ok("REST 응답 (스키마는 아래에서 확인)");
+  else bad("REST 응답", `HTTP ${r.status}`);
 } catch (e) {
   bad("REST 연결 실패", e.message);
   process.exit(1);
@@ -59,10 +63,13 @@ for (const t of [...TABLES, ...VIEWS]) {
   } else if (r.status === 404) bad(t, "없음 → SQL Editor 에서 schema.sql 다시 실행");
   else bad(t, `HTTP ${r.status}`);
 }
-for (const fn of ["touch_favorite_meal", "touch_workout_routine", "delete_own_account"]) {
-  const r = await fetch(base + `/rest/v1/rpc/${fn}`, { method: "POST", headers: { ...H, "content-type": "application/json" }, body: "{}", signal: AbortSignal.timeout(10_000) });
-  // 인자 누락은 400(함수는 있음), 함수 자체가 없으면 404
-  r.status === 404 ? bad(`함수 ${fn}`, "없음") : ok(`함수 ${fn}`);
+// 인자까지 맞춰 불러야 404(없음)와 구분된다. anon 은 RLS/권한 때문에 아무 행도 못 바꾸니 안전.
+const ZERO = "00000000-0000-0000-0000-000000000000";
+for (const [fn, args] of [["touch_favorite_meal", { fav_id: ZERO }], ["touch_workout_routine", { routine_id: ZERO }], ["delete_own_account", {}]]) {
+  const r = await fetch(base + `/rest/v1/rpc/${fn}`, { method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify(args), signal: AbortSignal.timeout(10_000) });
+  if (r.status === 404) bad(`함수 ${fn}`, "없음 → schema.sql 다시 실행");
+  else if (fn === "delete_own_account" && r.status === 200) bad(`함수 ${fn}`, "anon 이 실행 가능 → revoke 가 안 먹음");
+  else ok(`함수 ${fn}`, fn === "delete_own_account" ? "(anon 차단됨)" : "");
 }
 
 console.log("\n[3] 사진 버킷 meal-photos");
@@ -103,6 +110,7 @@ console.log("\n[5] 리다이렉트 (Authentication → URL Configuration)");
   const r = await fetch(base + `/auth/v1/authorize?provider=kakao&redirect_to=${encodeURIComponent(SITE + "/auth/callback")}`, { redirect: "manual", signal: AbortSignal.timeout(10_000) });
   const loc = r.headers.get("location") ?? "";
   if (r.status >= 300 && r.status < 400 && /kauth\.kakao|accounts\.google|kakao/i.test(loc)) ok("Kakao authorize 리다이렉트 동작");
+  else if (r.status === 400 && /not enabled/i.test(await r.clone().text())) console.log("  · Kakao 제공자 꺼짐 (선택 사항 — 이메일 로그인만 쓰면 무시)");
   else if (r.status === 400) bad("authorize 400", (await r.text()).slice(0, 120));
   else ok("authorize 응답", `HTTP ${r.status}`);
   console.log(`  · Redirect URLs 에 ${SITE}/auth/callback 와 http://localhost:3000/auth/callback 이 있는지는 대시보드에서만 보임`);
