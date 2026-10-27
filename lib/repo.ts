@@ -731,4 +731,22 @@ export class CloudRepo implements Repo {
       /* 고아 파일은 다음 삭제 때 함께 치우지 않아도 기록 자체엔 영향 없음 */
     }
   }
+
+  /**
+   * 회원 탈퇴. 순서: 내 사진 폴더 비우기 → auth 사용자 삭제(delete_own_account, 테이블 row는 cascade).
+   * 사진을 먼저 지우는 이유: 사용자가 사라지면 Storage 정책상 그 폴더를 더는 못 건드린다.
+   */
+  async deleteAccount() {
+    const folder = this.userId;
+    for (let round = 0; round < 50; round++) {
+      const { data, error } = await this.sb.storage.from(BUCKET).list(folder, { limit: 100 });
+      if (error) throw error;
+      if (!data?.length) break;
+      const { error: rmErr } = await this.sb.storage.from(BUCKET).remove(data.map((o) => `${folder}/${o.name}`));
+      if (rmErr) throw rmErr;
+      if (data.length < 100) break;
+    }
+    const { error } = await this.sb.rpc("delete_own_account");
+    if (error) throw error;
+  }
 }

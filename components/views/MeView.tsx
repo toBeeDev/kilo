@@ -8,6 +8,7 @@ import { GOAL_LABEL } from "@/lib/macros";
 import type { BodyRecord } from "@/lib/types";
 import { InbodySheet, TargetSummary } from "@/components/Inbody";
 import BodyTrend from "@/components/BodyTrend";
+import { AccountCard } from "@/components/AccountCard";
 import { Button, Card, Empty } from "@/components/ui";
 import { AppHeader } from "@/components/PageHeader";
 import { CloudRepo, LOCAL_SOFT_LIMIT, localUsageBytes } from "@/lib/repo";
@@ -183,6 +184,8 @@ export default function MeView() {
           </p>
         </section>
       )}
+
+      {user && <AccountCard user={user} />}
 
       <InbodySheet open={open} onClose={() => setOpen(false)} latest={latest} onSaved={load} />
     </>

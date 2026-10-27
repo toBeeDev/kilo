@@ -133,6 +133,27 @@ create table if not exists daily_summary (
 );
 
 -- ---------------------------------------------------------------
+-- 7. 회원 탈퇴 — 로그인한 본인만 자기 auth.users 행을 지운다.
+--    모든 테이블이 user_id → auth.users on delete cascade 라 기록이 함께 사라진다.
+--    Storage 파일은 앱이 먼저 지운다 (CloudRepo.deleteAccount).
+-- ---------------------------------------------------------------
+create or replace function delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not signed in';
+  end if;
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+revoke execute on function delete_own_account() from public, anon;
+grant execute on function delete_own_account() to authenticated;
+
+-- ---------------------------------------------------------------
 -- RLS: 전 테이블 본인 row만
 -- ---------------------------------------------------------------
 alter table body_metrics  enable row level security;

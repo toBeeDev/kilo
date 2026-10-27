@@ -68,6 +68,7 @@ iOS는 홈 화면에 추가한 앱에서 OAuth를 시작하면 Safari로 빠져�
 - 사진 버킷은 **비공개**다. 읽기·쓰기·삭제 모두 본인 폴더(`<user-id>/…`)만 허용하고, 앱은 1시간짜리 서명 URL로 보여준다. jpeg 5MB 제한. 기록을 지우거나 사진을 다시 찍으면 예전 파일도 같이 지운다.
 
 **3. 로그인 제공자** (Authentication → Providers)
+- **이메일+비밀번호**는 기본으로 켜져 있다. 카카오·구글 등록 없이도 `/signup` 에서 바로 가입된다. 혼자 쓰면 Email → "Confirm email" 을 꺼서 확인 메일 단계를 건너뛰어도 된다 (켜 두면 Supabase 기본 발송은 시간당 몇 통으로 제한).
 - **Kakao**: [developers.kakao.com](https://developers.kakao.com) → 앱 만들기 → 앱 키의 **REST API 키** = Client ID, 보안 → **Client Secret** 생성·활성화 = Client Secret. 카카오 로그인 → 활성화 ON, Redirect URI에 Supabase가 보여주는 `https://<ref>.supabase.co/auth/v1/callback` 등록. 동의항목에서 닉네임·프로필 사진(선택)·이메일(선택) 켜기.
 - **Google**: GCP → APIs & Services → OAuth 동의 화면(외부, 테스트 사용자에 본인 계정) → 사용자 인증 정보 → OAuth 클라이언트 ID(웹). 승인된 리디렉션 URI에 같은 `https://<ref>.supabase.co/auth/v1/callback`. Client ID/Secret을 Supabase Google 제공자에 입력.
 - 둘 중 하나만 켜도 된다. 혼자 쓰면 Kakao 하나로 충분.
@@ -82,7 +83,9 @@ iOS는 홈 화면에 추가한 앱에서 OAuth를 시작하면 Safari로 빠져�
 - `service_role` 키는 앱에서 안 쓴다. 어디에도 넣지 말 것.
 
 **6. 확인**
-- `/login` 에서 Kakao/Google 로그인 → 홈으로 돌아오고 마이 탭에 "클라우드 저장"이 보이면 성공.
+- `npm run check:supabase` (또는 `node scripts/check-supabase.mjs <URL> <ANON_KEY>`) — 테이블·뷰·함수·버킷 정책·제공자를 밖에서 점검한다.
+- `/signup` 에서 이메일 가입 또는 `/login` 에서 Kakao/Google 로그인 → 홈으로 돌아오고 마이 탭에 "클라우드 저장"이 보이면 성공.
+- 마이 탭 맨 아래 "계정" 카드: 비밀번호 변경(이메일 가입자), 회원 탈퇴(사진·기록·계정 전부 삭제, `delete_own_account` 함수).
 - 게스트로 쓰던 기록이 있으면 마이 탭에 "이 기기에 남은 기록" 카드가 뜬다 → "클라우드로 옮기기" 한 번 (인바디·식사·세트·즐겨찾기·루틴 전부). 중간에 끊겨도 다시 누르면 같은 id로 덮어써서 중복이 안 생긴다.
 - 사진 기록 한 번 올려서 Storage → `meal-photos/<user-id>/` 에 파일이 생기는지 본다.
 

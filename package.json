@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "check": "eslint . && tsc --noEmit -p . && vitest run",
-    "type-check": "tsc --noEmit -p ."
+    "type-check": "tsc --noEmit -p .",
+    "check:supabase": "node scripts/check-supabase.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
