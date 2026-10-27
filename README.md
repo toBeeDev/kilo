@@ -73,8 +73,8 @@ iOS는 홈 화면에 추가한 앱에서 OAuth를 시작하면 Safari로 빠져�
 - 둘 중 하나만 켜도 된다. 혼자 쓰면 Kakao 하나로 충분.
 
 **4. 리다이렉트 허용** (Authentication → URL Configuration)
-- Site URL: 배포 주소 (예: `https://kilo.vercel.app`). 로컬 테스트 땐 `http://localhost:3000`.
-- Redirect URLs에 전부 추가: `http://localhost:3000/auth/callback`, `https://<배포도메인>/auth/callback`, Vercel 프리뷰도 쓰면 `https://*-toBeeDev.vercel.app/auth/callback`.
+- Site URL: 배포 주소 (`https://kilo-red.vercel.app`). 로컬 테스트 땐 `http://localhost:3000`.
+- Redirect URLs에 전부 추가: `http://localhost:3000/auth/callback`, `https://kilo-red.vercel.app/auth/callback`, Vercel 프리뷰도 쓰면 `https://*-toBeeDev.vercel.app/auth/callback`.
 
 **5. 환경변수**
 - Project Settings → API 에서 **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`, **anon public** 키 → `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
