@@ -1,17 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorker from "@/components/ServiceWorker";
+import { JsonLd } from "@/components/JsonLd";
+import { rootMetadata, webAppJsonLd, SITE } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "kilo",
-  description: "인바디 기반 식단·운동 기록",
-  manifest: "/manifest.webmanifest",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "kilo",
-  },
-};
+export const metadata: Metadata = rootMetadata();
 
 export const viewport: Viewport = {
   themeColor: "#f5f5f5",
@@ -24,8 +17,9 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko">
+    <html lang={SITE.lang}>
       <body className="min-h-dvh">
+        <JsonLd data={webAppJsonLd()} />
         {children}
         <ServiceWorker />
       </body>

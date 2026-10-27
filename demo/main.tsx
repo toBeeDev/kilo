@@ -6,10 +6,10 @@
 import { createRoot } from "react-dom/client";
 import { RepoProvider } from "@/lib/repo-provider";
 import TabBar from "@/components/TabBar";
-import Home from "@/app/(app)/page";
-import Meals from "@/app/(app)/meals/page";
-import Workout from "@/app/(app)/workout/page";
-import Me from "@/app/(app)/me/page";
+import Home from "@/components/views/HomeView";
+import Meals from "@/components/views/MealsView";
+import Workout from "@/components/views/WorkoutView";
+import Me from "@/components/views/MeView";
 import { usePathname } from "./shims/navigation";
 import { seedIfEmpty } from "./seed";
 

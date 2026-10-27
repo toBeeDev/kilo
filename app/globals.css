@@ -31,6 +31,11 @@
   --danger-soft: #fde8e6;
   /* 바디맵 자극 부위 */
   --muscle: #ff5a3c;
+  /* 탭 헤더 타이틀 형광펜: 홈 주황 / 식단 초록 / 운동 보라 / 마이 파랑 (타일 색의 연한 버전) */
+  --hl-home: #fde3d2;
+  --hl-meal: #dcf3e5;
+  --hl-workout: #e6e0fd;
+  --hl-me: #e2ecfc;
   --r-lg: 22px;
   --r-md: 16px;
   --r-sm: 12px;

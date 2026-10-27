@@ -6,25 +6,26 @@ import { calcTarget } from "@/lib/macros";
 import { shiftDay, todayStr, type DayTotal } from "@/lib/types";
 import Calendar, { monthRange, ymOf } from "@/components/Calendar";
 import { Sheet } from "@/components/ui";
-import { AppHeader, Pill } from "@/components/PageHeader";
+import { AppHeader } from "@/components/PageHeader";
 
 /**
- * 식단/운동 탭 공용 헤더.
- * - AppHeader 위: 탭별 컨트롤(right) + 계정 버튼
- * - 큰 제목 + 회색 날짜, 오른쪽 "오늘 ⌄" 알약 → 달력 시트
- * - 아래: ‹ › 하루 이동 (과거면 "오늘" 링크)
+ * 식단/운동 탭 공용 헤더 (시안 5).
+ * - 윗줄: 제목(형광펜) + 탭 컨트롤(right) + 계정 버튼
+ * - 아랫줄: ‹ 날짜 ⌄ › 스테퍼 하나. 가운데를 누르면 달력 시트, 양옆은 하루 이동. 과거면 "오늘로" 링크.
  * 미래 날짜는 막는다.
  */
 export function DayHeader({
   title,
+  highlight,
   day,
   onChange,
   right,
 }: {
   title: string;
+  highlight?: string;
   day: string;
   onChange: (d: string) => void;
-  /** 상단 오른쪽 컨트롤 (세그먼트, 카메라 버튼 등) */
+  /** 윗줄 오른쪽 컨트롤 (세그먼트, 카메라 버튼 등) */
   right?: React.ReactNode;
 }) {
   const today = todayStr();
@@ -32,39 +33,30 @@ export function DayHeader({
   const [open, setOpen] = useState(false);
   const d = new Date(day + "T00:00:00");
   const dow = "일월화수목금토"[d.getDay()];
-  const dateLine = `${d.getMonth() + 1}월 ${d.getDate()}일 ${dow}요일`;
-  const pillLabel = isToday ? "오늘" : `${d.getMonth() + 1}/${d.getDate()}`;
-  const nav = "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg active:scale-95";
+  const label = isToday ? `오늘, ${d.getMonth() + 1}월 ${d.getDate()}일` : `${d.getMonth() + 1}월 ${d.getDate()}일 ${dow}요일`;
+  const nav = "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[17px] leading-none active:scale-95";
 
   return (
     <>
-      <AppHeader
-        title={title}
-        subtitle={dateLine}
-        actions={right}
-        titleRight={
-          <Pill onClick={() => setOpen(true)} label="날짜 선택">
-            {pillLabel}
-          </Pill>
-        }
-      />
+      <AppHeader title={title} highlight={highlight} actions={right} />
 
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" className={nav} style={{ background: "var(--card)", border: "1px solid var(--line)" }} onClick={() => onChange(shiftDay(day, -1))} aria-label="전날">
-          ‹
-        </button>
-        <button
-          type="button"
-          className={nav}
-          style={{ background: "var(--card)", border: "1px solid var(--line)", opacity: isToday ? 0.3 : 1 }}
-          onClick={() => !isToday && onChange(shiftDay(day, 1))}
-          disabled={isToday}
-          aria-label="다음날"
-        >
-          ›
-        </button>
+        <div className="inline-flex items-center gap-0.5 rounded-full p-[3px]" style={{ background: "var(--card)", border: "1px solid var(--line)" }}>
+          <button type="button" className={nav} onClick={() => onChange(shiftDay(day, -1))} aria-label="전날">
+            ‹
+          </button>
+          <button type="button" className="flex h-8 items-center gap-1 px-1.5 text-[13px] font-semibold active:opacity-70" onClick={() => setOpen(true)} aria-label="날짜 선택">
+            {label}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <button type="button" className={nav} style={{ opacity: isToday ? 0.3 : 1 }} onClick={() => !isToday && onChange(shiftDay(day, 1))} disabled={isToday} aria-label="다음날">
+            ›
+          </button>
+        </div>
         {!isToday && (
-          <button type="button" className="ml-1 text-[13px] font-semibold underline underline-offset-2" style={{ color: "var(--muted)" }} onClick={() => onChange(today)}>
+          <button type="button" className="text-[13px] font-semibold underline underline-offset-2" style={{ color: "var(--muted)" }} onClick={() => onChange(today)}>
             오늘로
           </button>
         )}

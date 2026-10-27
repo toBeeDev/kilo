@@ -20,48 +20,45 @@ export function timeGreeting(d = new Date()) {
 }
 
 /**
- * 탭 공용 헤더 (2단).
- * - 1줄: 왼쪽 leading 슬롯, 오른쪽 actions + 계정 버튼(비회원=로그인 아이콘, 회원=프로필)
- * - 2줄: 큰 제목 + 회색 한 줄, 오른쪽 titleRight(알약 드롭다운 등)
+ * 탭 공용 헤더 (시안 5: 한 줄).
+ * 왼쪽 큰 제목(형광펜 하이라이트) + 선택적 회색 한 줄, 오른쪽 탭 컨트롤 + 계정 버튼.
+ * 날짜 조작은 DayHeader의 스테퍼가 아랫줄에서 맡는다.
  */
 export function AppHeader({
   title,
   subtitle,
-  leading,
+  highlight,
   actions,
-  titleRight,
   account = true,
 }: {
   title: string;
   subtitle?: string;
-  leading?: React.ReactNode;
+  /** 제목 뒤 형광펜 색 (CSS color). 예: "var(--hl-workout)" */
+  highlight?: string;
   actions?: React.ReactNode;
-  titleRight?: React.ReactNode;
-  /** 계정 버튼 숨김 (마이 탭 등) */
+  /** 계정 버튼 숨김 */
   account?: boolean;
 }) {
-  const hasTop = !!leading || !!actions || account;
   return (
-    <header>
-      {hasTop && (
-        <div className="flex min-h-11 items-center justify-between gap-2">
-          <div className="flex items-center gap-2">{leading}</div>
-          <div className="flex items-center gap-2">
-            {actions}
-            {account && <AccountButton />}
+    <header className="flex items-start justify-between gap-3">
+      <div className="min-w-0 pt-1">
+        <h1 className="text-[28px] font-bold leading-[1.15] tracking-tight">
+          <span
+            className="box-decoration-clone rounded-[6px] px-1 -mx-1"
+            style={highlight ? { backgroundImage: `linear-gradient(to top, ${highlight} 0 42%, transparent 42%)` } : undefined}
+          >
+            {title}
+          </span>
+        </h1>
+        {subtitle && (
+          <div className="mt-1 truncate text-[14px]" style={{ color: "var(--muted)" }}>
+            {subtitle}
           </div>
-        </div>
-      )}
-      <div className={`${hasTop ? "mt-4" : "mt-1"} flex items-end justify-between gap-3`}>
-        <div className="min-w-0">
-          <h1 className="text-[28px] font-bold leading-[1.15] tracking-tight">{title}</h1>
-          {subtitle && (
-            <div className="mt-0.5 truncate text-[14px]" style={{ color: "var(--muted)" }}>
-              {subtitle}
-            </div>
-          )}
-        </div>
-        {titleRight && <div className="shrink-0 pb-0.5">{titleRight}</div>}
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {actions}
+        {account && <AccountButton />}
       </div>
     </header>
   );
@@ -94,24 +91,6 @@ export function AccountButton() {
     >
       <PersonIcon />
     </Link>
-  );
-}
-
-/** 제목 오른쪽 알약 드롭다운 ("오늘 ⌄") */
-export function Pill({ onClick, label, children }: { onClick: () => void; label?: string; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="flex h-9 items-center gap-1 rounded-full pl-3.5 pr-2.5 text-[13px] font-semibold active:scale-95"
-      style={{ background: "var(--ink)", color: "#fff" }}
-    >
-      {children}
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M6 9l6 6 6-6" />
-      </svg>
-    </button>
   );
 }
 
